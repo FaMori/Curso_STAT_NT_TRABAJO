@@ -1,12 +1,12 @@
 library(tidyverse)
 library(here)
 
-
 datos.aprov.2019 <- read_csv2(here("aprovechamientos-2019.csv"))
 
 datos.l <- datos.aprov.2019 %>%
-           select(1,11,12,13,14,15,16,17,18,19,21,23) %>%
+           select(1,3,11,12,13,14,15,16,17,18,19,21,23) %>%
            rename("T_ext"= "Tipo de Obra" ,
+                  "F_vec" = "Fecha Vencimiento",
                   "Vol"= "Volumen",
                   "Dest"= "Destino",
                   "M_ini" = "Mes Inicio",
@@ -21,7 +21,14 @@ datos.l$Uso <- factor(datos.l$Uso)
 datos.l$Dest <- factor(datos.l$Dest)
 datos.l$Depto <- factor(datos.l$Depto)
 datos.l$Cod_cuenca <- factor(datos.l$Cod_cuenca)
+datos.l$F_vec <- as.Date(datos.l$F_vec,"%d/%m/%Y")
 
-
+datos.l.act <- datos.l %>%
+               filter(F_vec >= as.Date("05/06/2023","%d/%m/%Y"))             
+  
 summary(datos.l)
+
+
+
+
 
