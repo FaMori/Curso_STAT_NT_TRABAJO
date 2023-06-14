@@ -1,0 +1,174 @@
+---
+title: "Usos de los recursos hidricos en el Uruguay"
+author: "Facundo Morini, Mariana Ceresa"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning =FALSE)
+library(here)
+library(readxl)
+library(tidyverse)
+library(sf)
+library(xtable)
+```
+
+# Introducción
+
+A lo largo de los últimos años, el cambio climático y las sequías han impactado significativamente a nuestro país, generando una creciente preocupación en torno al uso del agua. En este contexto, resulta fundamental analizar el aprovechamiento de los recursos hídricos en Uruguay. El presente trabajo tiene como objetivo principal explorar e informar sobre los diversos usos que se le da al agua en nuestro país. Para ello, se utilizarán los datos abiertos disponibles proporcionados por la Dirección Nacional del Agua (DINAGUA), específicamente el registro de empresas que explotan recursos hídricos.
+
+Dentro de este estudio, nos planteamos responder a preguntas fundamentales, tales como:
+
+1. ¿En qué se utiliza la mayor parte del agua extraída en Uruguay?
+2. ¿Qué sectores de la actividad requieren mayores volúmenes de agua?
+3. ¿Qué zonas del país presentan mayores demanda de uso?
+
+# Datos
+
+Como se mencionó, los datos utilizados pertenecen a la Dirección Nacional del Agua. Estos datos comprenden el registro de todas las empresas que realizan extracciones de agua para diversos usos productivos. El registro abarca un total de 3441 empresas, tanto públicas como privadas. Si bien los datos disponibles corresponden al año 2019, la gran mayoría de los registros aún se encuentran vigentes hasta la fecha actual.
+
+Entre los datos, se incluyen variables de interés, tales como:
+
+1. Tipo de Obra: Se refiere al tipo de estructura utilizada para la extracción del agua, que puede ser a través de represas, tomas directas en ríos o pozos, entre otras opciones comunes.
+
+2. Volumen Anual: Indica el volumen máximo de agua permitido para la extracción. Este valor depende en parte, por el tipo de obra utilizada para la extracción.
+
+3. Uso: Hace referencia al propósito o destino que se le dará al agua. Los usos se clasifican en consumo humano, uso industrial, riego, otros usos agropecuarios y otros usos adicionales (turismo y recreación, control de incendios, comercio y servicios).
+
+4. Destino: Detalla el lugar o fin específico donde se utilizará el agua, por ejemplo, en el caso del riego, se especifica el tipo de cultivo.
+
+5. Ubicación: Proporciona las coordenadas (latitud y longitud) donde se encuentra la estructura de extracción.
+
+6. Cuencas: Permite identificar la cuenca hidrográfica de la cual se está realizando la extracción. Una cuenca se refiere a toda el área de terreno que contribuye al flujo de agua en un río.
+
+
+```{r,echo=FALSE}
+datos <- read_csv2(here("Datos","aprovechamientos-2019.csv"))
+
+datos.c <- datos %>%
+           filter(Estado == "Registrada") %>%
+           select("Tipo de Obra","Volumen","Uso","Destino",
+                  "Lat","Lon","Mes Inicio","Mes Final","Horas x Año",
+                  "Depto.-Padrón","Fecha de Inscripción","Fecha Vencimiento","c_1","c_2") %>%
+           rename("t_obra"= "Tipo de Obra","v_anual"= "Volumen",
+                  "dest"= "Destino","m_ini" = "Mes Inicio","uso"="Uso",
+                  "m_fin" = "Mes Final","h_anio" = "Horas x Año","cuenca_1"="c_1","cuenca_2"="c_2",
+                  "dpto" = "Depto.-Padrón","f_ins"="Fecha de Inscripción","f_venc"="Fecha Vencimiento") %>%
+           mutate(t_obra =factor(t_obra),uso =factor(uso),
+                  dest =factor(dest), dpto = dpto,dpto = factor(gsub("-.*", "", dpto)),
+                  f_ins=as.Date(f_ins,format="%d/%m/%Y"),f_venc=as.Date(f_venc,format="%d/%m/%Y")) %>%
+           mutate(dur_perm = f_venc-f_ins)
+
+```
+
+```{r}
+mapa_dpto <- st_read(here("Mapa","limdpto.shp.zip")) %>% 
+             mutate(depto=iconv(depto, from = "ISO-8859-1", to = "UTF-8"))
+
+mapa_cuenca_1 <- st_read(here("Mapa","cuencas_1.shp.zip")) %>% 
+                 mutate(nam=iconv(nam, from = "ISO-8859-1", to = "UTF-8"),
+                 tipo_objet=iconv(tipo_objet, from = "ISO-8859-1", to = "UTF-8")) %>%
+                 rename("cuenca_1"="nam")
+
+mapa_cuenca_2 <- st_read(here("Mapa","cuencas_2.shp.zip")) %>% 
+                 mutate(nam=iconv(nam, from = "ISO-8859-1", to = "UTF-8"),
+                 tipo_objet=iconv(tipo_objet, from = "ISO-8859-1", to = "UTF-8"))  %>%
+                 rename("cuenca_2"="nam")
+```
+
+# Principales usos 
+
+## Numero de registros por uso
+
+```{r,echo=FALSE}
+#Registros por uso
+reg_uso <- datos.c %>%
+           group_by(uso) %>%
+           ggplot() + geom_bar(aes(x=fct_infreq(uso),fill=uso)) + 
+           scale_y_continuous(name="Cantidad de registros por uso") + scale_x_discrete(name="Usos") + coord_flip() +                         theme(legend.position = "none")
+```
+
+```{r}
+reg_uso
+```
+## Cuencas hidrograficas catalogadas por uso mayoritario
+
+```{r,echo=FALSE}
+#Principal uso por cuenca
+uso_cuenca <- datos.c %>%
+              filter(!is.na(cuenca_2)) %>%
+              group_by(cuenca_2,uso) %>%
+              summarise(n_reg=n()) %>%
+              slice_max(order_by = n_reg, n = 1) %>%
+              slice(1) 
+
+mapa_cuenca_2 <- left_join(mapa_cuenca_2,uso_cuenca,by="cuenca_2")
+  
+p_uso_cuenca <- ggplot() + geom_sf(data=mapa_cuenca_2,aes(fill=uso)) + theme_minimal()
+```
+
+```{r, fig.cap="Mayor uso por cuenca hidrografica"}
+p_uso_cuenca
+```
+## Distribucion en el mapa de las distintas obras por usos
+
+```{r,echo=FALSE}
+p_point_emp <- datos.c %>%
+               filter(Lat < 0, uso %in% c("Riego","Consumo humano","Industrial","Otros usos agropecuarios")) %>%
+               select(Lat,Lon,uso) %>%
+               ggplot() + geom_sf(data=mapa_dpto) + 
+               geom_point(aes(x = Lon, y = Lat,color=uso), size = 1.5, alpha = 0.8) + facet_wrap(~uso,ncol = 2) + theme(legend.position = "none",axis.text = element_blank(),axis.ticks = element_blank(),axis.title = element_blank())
+```
+
+```{r,echo=FALSE}
+p_point_emp
+```
+# Riego
+
+## Cantidad de registros por cultivo
+
+```{r,echo=FALSE}
+#Registros por uso
+reg_cult <- datos.c %>%
+           filter(uso == "Riego") %>%
+           group_by(dest) %>%
+           ggplot() + geom_bar(aes(x=fct_infreq(dest),fill=dest)) + 
+           scale_y_continuous(name="Cantidad de registros por cultivo") + scale_x_discrete(name="Cultivo") + coord_flip() +                         theme(legend.position = "none")
+```
+
+```{r,echo=FALSE}
+reg_cult
+```
+## Volumenes anuales por cultivo
+
+```{r,echo=FALSE}
+#Registros por uso
+vol_cult <- datos.c %>%
+           filter(uso == "Riego") %>%
+           group_by(dest) %>%
+           summarise(vol = sum(v_anual)) %>%
+           ggplot() + geom_bar(aes(x=reorder(dest,vol),y=vol,fill=dest),stat="identity") + 
+           scale_y_continuous(name="Volumen anual disponible por cultivo (m3)") + scale_x_discrete(name="Cultivo") + coord_flip() + theme(legend.position = "none")
+```
+
+```{r,echo=FALSE}
+vol_cult
+```
+# Volumen anual disponible para la extraccion por cuenca 
+
+```{r,echo=FALSE}
+#Volumen anual disponible por cuenca
+vol_cuenca <- datos.c %>%
+              filter(!is.na(cuenca_2)) %>%
+              group_by(cuenca_2) %>%
+              summarise(v_anu=sum(v_anual))
+              
+mapa_cuenca_2 <- left_join(mapa_cuenca_2,vol_cuenca,by="cuenca_2")
+
+p_vol_cuenca <- ggplot() + geom_sf(data=mapa_cuenca_2,aes(fill=v_anu)) + scale_fill_viridis_c(name="Volumen anual disponible (m3)") 
+```
+
+```{r, fig.cap="Volumen anual disponible para extraer por cuenca hidrografica"}
+p_vol_cuenca
+```
