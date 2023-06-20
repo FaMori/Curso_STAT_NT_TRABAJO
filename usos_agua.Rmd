@@ -12,6 +12,10 @@ library(readxl)
 library(tidyverse)
 library(geouy)
 library(xtable)
+library(rpart)
+library(rpart.plot)
+library(caret)
+library(randomForest)
 ```
 
 # Introducción
@@ -34,6 +38,12 @@ Por último, crearemos un modelo predictivo con el objetivo de predecir el uso d
 datos <- read_csv2(here("Datos","aprovechamientos_2023.csv"))
 datos_19 <- read_csv2(here("Datos","aprovechamientos_2019.csv"))
 
+summary(datos)
+summary(datos_19)
+```
+
+
+```{r}
 datos_l <- datos %>%
            select(-"Regional",-"Estado",-"Tipo Solicitud",-"Fecha Solicitud",-"Fecha Resolución",-"Fecha Inscripción",
                   -"Fecha Vencimiento",-"produccion",-"Inicio",-"Fin") %>%
@@ -49,6 +59,7 @@ datos_l <- datos %>%
 
 datos_coord <- datos_19 %>%
                filter(Lat < 0) %>%
+               filter(Lon < 0) %>% 
                rename("cod_reg"="Nro. GEX","lat"="Lat","lon"="Lon") %>%
                select(cod_reg,lat,lon)
 
@@ -68,7 +79,7 @@ t_datos <- tibble("Nombre Variable" = names(datos_l),
                                    "Detalla el lugar o fin específico donde se utilizará el agua, por ejemplo, en el caso del riego, se especifica el tipo de cultivo.", 
                                    "Indica el volumen máximo de agua permitido para la extracción. Este valor depende en parte, por el tipo de obra utilizada para la extracción.", 
                                    "Se refiere al tipo de estructura utilizada para la extracción del agua, que puede ser a través de represas, tomas directas en ríos o pozos, entre otras opciones comunes.", 
-                                   "detallescuenca", 
+                                   "Cantidad de meses en el año que se usa el agua que se extrae", 
                                    "Permite identificar la cuenca hidrográfica de nivel 2  a la cual se está realizando la extracción.", 
                                    "Permite identificar la cuenca hidrográfica de nivel 1 a la cual se está realizando la extracción.", 
                                    "Coordenadas de latitud de la obra de extraccion", 
@@ -174,6 +185,113 @@ vol_cult <- datos_l %>%
 ```{r,echo=FALSE}
 vol_cult
 ```
+```{r}
+tabla_usos <- datos_l %>%
+  select(uso) %>%
+  group_by(uso) %>%
+  summarise(Cantidad=n()) %>%
+  mutate(Porcentaje = round(((Cantidad/sum(Cantidad))*100), 2)) %>%
+  mutate(Proporcion = round((Cantidad/sum(Cantidad)), 4)) %>%
+  arrange(., desc(Porcentaje))
 
+tabla_usos
+```
 
+```{r}
+set.seed(623)
 
+# Dividimos la muestra en subconjunto de entrenamiento y test
+training <- sample_frac(datos_l, .7) 
+test <- setdiff(datos_l, training)
+```
+
+```{r}
+# Usamos rpart para estimar el árbol
+arbol_1 <- rpart(formula = uso ~ dpto + vol_anual + tipo_ext, data = training)
+```
+```{r}
+rpart.plot(arbol_1)
+```
+
+En el modelo anteriormente desarrollado podemos ver, antes de realizar la predicción con el conjunto de testing, que el modelo no está prediciendo la ocurrencia de "Consumo humano", "Otros usos" y "Usos no consuntivos"
+
+```{r}
+prediccion_1 <- predict(arbol_1, newdata = test, type = "class")
+confusionMatrix(prediccion_1, test[["uso"]])
+```
+
+Vamos a tratar el desbalance
+```{r}
+training <- left_join(training, tabla_usos, by="uso")
+```
+
+```{r}
+arbol_2 <- rpart(formula = uso ~ dpto + vol_anual + tipo_ext, data = training, weight = Proporcion)
+
+rpart.plot(arbol_2)
+
+```
+
+```{r}
+prediccion_2 <- predict(arbol_2, newdata = test, type = "class")
+confusionMatrix(prediccion_2, test[["uso"]])
+```
+
+No se observa una mejor performance, por lo que vamos a probar con un Random Forest
+
+```{r}
+print(paste("Cantidad de registros totales: ", nrow(datos_l)))
+
+datos_sin_na <- datos_l %>%
+  filter(!is.na(dpto) & !is.na(vol_anual) & !is.na(tipo_ext))
+
+print(paste("Cantidad de registros sin NA: ", nrow(datos_sin_na)))
+```
+```{r}
+set.seed(897)
+
+# Divide muestra en subconjunto de entrenamiento y test
+training_rf <- sample_frac(datos_sin_na, .7) 
+test_rf <- setdiff(datos_sin_na, training_rf)
+
+rf_1 <- randomForest(uso ~ dpto + vol_anual + tipo_ext, data= training_rf, ntree = 150)
+prediccion_3 <- predict(rf_1, newdata = test_rf, type = "class")
+confusionMatrix(prediccion_3, test_rf[["uso"]])
+
+```
+
+Probemos clasificar en:
+- Riego
+- Otros usos agrpecuarios
+- Industrial
+- Otros
+
+```{r}
+datos_nueva_clasificacion <- datos_sin_na %>% mutate(uso = as.character(uso))
+datos_nueva_clasificacion <- mutate(datos_nueva_clasificacion, uso = ifelse(uso %in% c("Riego", "Otros Usos Agropecuarios", "Industrial"), uso, "Otros")) %>%
+  mutate(uso = factor(uso))
+
+tabla_usos_nc <- datos_nueva_clasificacion %>%
+  select(uso) %>%
+  group_by(uso) %>%
+  summarise(Cantidad=n()) %>%
+  mutate(Porcentaje = round(((Cantidad/sum(Cantidad))*100), 2)) %>%
+  mutate(Proporcion = round((Cantidad/sum(Cantidad)), 4)) %>%
+  arrange(., desc(Porcentaje))
+
+tabla_usos_nc
+```
+
+```{r}
+set.seed(123321)
+
+# Dividimos la muestra en subconjunto de entrenamiento y test
+training_nc <- sample_frac(datos_nueva_clasificacion, .7) 
+test_nc <- setdiff(datos_nueva_clasificacion, training_nc)
+```
+
+```{r}
+rf_nc_1 <- randomForest(uso ~ dpto + vol_anual + tipo_ext, data= training_nc, ntree = 10)
+prediccion_nc_1 <- predict(rf_nc_1, newdata = test_nc, type = "class")
+confusionMatrix(prediccion_nc_1, test_nc[["uso"]])
+```
