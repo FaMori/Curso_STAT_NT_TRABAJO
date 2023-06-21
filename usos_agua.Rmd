@@ -20,11 +20,11 @@ library(randomForest)
 
 # Introducción
 
-A lo largo de los últimos años, el cambio climático y las sequías han impactado significativamente a nuestro país, generando una creciente preocupación en torno al uso del agua. En este contexto, resulta fundamental analizar el aprovechamiento de los recursos hídricos en Uruguay. El presente trabajo tiene como objetivo principal explorar e informar sobre los diversos usos que se le da al agua en nuestro país. Para ello, se utilizarán los datos abiertos disponibles proporcionados por la Dirección Nacional del Agua (DINAGUA), específicamente el registro de empresas que explotan recursos hídricos.
+A lo largo de los últimos años, el cambio climático y las sequías han impactado significativamente a nuestro país, generando una creciente preocupación en torno al uso del agua. En este contexto, resulta fundamental analizar el aprovechamiento de los recursos hídricos en Uruguay. El presente trabajo tiene como objetivo principal explorar e informar sobre los diversos usos que se le da al agua en nuestro país. Para ello, se utilizarán los datos abiertos disponibles proporcionados por la Dirección Nacional del Agua (DINAGUA), específicamente el registro de empresas que realizan solicitudes para explotar los recursos hídricos.
 
 Dentro de este estudio, nos planteamos responder a preguntas fundamentales, tales como:
 
-1. ¿En qué se utiliza la mayor parte del agua extraída en Uruguay?
+1. ¿En qué se utiliza la mayor parte del agua que se solicita extraer?
 2. ¿Qué sectores de la actividad requieren mayores volúmenes de agua?
 3. ¿Qué zonas del país presentan mayores demanda de uso?
 
@@ -37,16 +37,16 @@ Por último, crearemos un modelo predictivo con el objetivo de predecir el uso d
 ```{r}
 datos <- read_csv2(here("Datos","aprovechamientos_2023.csv"))
 datos_19 <- read_csv2(here("Datos","aprovechamientos_2019.csv"))
-
+```
+```{r, include=FALSE}
 summary(datos)
 summary(datos_19)
 ```
 
-
 ```{r}
 datos_l <- datos %>%
            select(-"Regional",-"Estado",-"Tipo Solicitud",-"Fecha Solicitud",-"Fecha Resolución",-"Fecha Inscripción",
-                  -"Fecha Vencimiento",-"produccion",-"Inicio",-"Fin") %>%
+                  -"Fecha Vencimiento",-"produccion") %>%
            rename("cod_reg"= "nro_gex","nom_reg"= "Nombre","dpto"= "departamento",
                   "vol_anual"="Volumen Anual (m3)","tipo_ext"="Categoría","mes_anio"="Meses/Año") %>%
            rename_all(tolower) %>%
@@ -55,7 +55,11 @@ datos_l <- datos %>%
            mutate(codcuenca_nv1=factor(substr(codcuenca, 1, 1))) %>%
            mutate(tipo_ext = str_to_title(tipo_ext),nom_reg=toupper(nom_reg)) %>%
            mutate(tipo_ext = case_when(tipo_ext == "Pozoestudio" ~ "Pozo",.default=tipo_ext)) %>%
-           mutate(tipo_ext = factor(tipo_ext))
+           mutate(tipo_ext = factor(tipo_ext)) %>%
+           mutate(inicio = as.Date(inicio)) %>%
+           mutate(fin = as.Date(fin)) %>%
+           mutate(dif_dias_ini_fin = difftime(fin, inicio, units = "days"))
+
 
 datos_coord <- datos_19 %>%
                filter(Lat < 0) %>%
@@ -78,10 +82,13 @@ t_datos <- tibble("Nombre Variable" = names(datos_l),
                                    "Hace referencia al propósito o destino que se le dará al agua. Los usos se clasifican en consumo humano, uso industrial, riego, otros usos agropecuarios y otros usos adicionales (turismo y recreación, control de incendios, comercio y servicios).", 
                                    "Detalla el lugar o fin específico donde se utilizará el agua, por ejemplo, en el caso del riego, se especifica el tipo de cultivo.", 
                                    "Indica el volumen máximo de agua permitido para la extracción. Este valor depende en parte, por el tipo de obra utilizada para la extracción.", 
+                                   "Fecha en la que se inicia la solicitud de extracción",
+                                   "Fecha en la que caduca el permiso de extracción",
                                    "Se refiere al tipo de estructura utilizada para la extracción del agua, que puede ser a través de represas, tomas directas en ríos o pozos, entre otras opciones comunes.", 
                                    "Cantidad de meses en el año que se usa el agua que se extrae", 
                                    "Permite identificar la cuenca hidrográfica de nivel 2  a la cual se está realizando la extracción.", 
-                                   "Permite identificar la cuenca hidrográfica de nivel 1 a la cual se está realizando la extracción.", 
+                                   "Permite identificar la cuenca hidrográfica de nivel 1 a la cual se está realizando la extracción.",
+                                   "Diferencia en días entre la fecha inicio y fin", 
                                    "Coordenadas de latitud de la obra de extraccion", 
                                    "Coordenadas de longitud de la obra de extraccion"))
 meta_datos <- xtable(t_datos,include.rownames = FALSE)
@@ -207,13 +214,11 @@ test <- setdiff(datos_l, training)
 
 ```{r}
 # Usamos rpart para estimar el árbol
-arbol_1 <- rpart(formula = uso ~ dpto + vol_anual + tipo_ext, data = training)
+arbol_1 <- rpart(formula = uso ~ dpto + vol_anual + tipo_ext + dif_dias_ini_fin, data = training)
 ```
 ```{r}
 rpart.plot(arbol_1)
 ```
-
-En el modelo anteriormente desarrollado podemos ver, antes de realizar la predicción con el conjunto de testing, que el modelo no está prediciendo la ocurrencia de "Consumo humano", "Otros usos" y "Usos no consuntivos"
 
 ```{r}
 prediccion_1 <- predict(arbol_1, newdata = test, type = "class")
@@ -226,10 +231,9 @@ training <- left_join(training, tabla_usos, by="uso")
 ```
 
 ```{r}
-arbol_2 <- rpart(formula = uso ~ dpto + vol_anual + tipo_ext, data = training, weight = Proporcion)
+arbol_2 <- rpart(formula = uso ~ dpto + vol_anual + tipo_ext + dif_dias_ini_fin, data = training, weight = Proporcion)
 
 rpart.plot(arbol_2)
-
 ```
 
 ```{r}
@@ -243,7 +247,7 @@ No se observa una mejor performance, por lo que vamos a probar con un Random For
 print(paste("Cantidad de registros totales: ", nrow(datos_l)))
 
 datos_sin_na <- datos_l %>%
-  filter(!is.na(dpto) & !is.na(vol_anual) & !is.na(tipo_ext))
+  filter(!is.na(dpto) & !is.na(vol_anual) & !is.na(tipo_ext) & !is.na(dif_dias_ini_fin) & dif_dias_ini_fin >= 0)
 
 print(paste("Cantidad de registros sin NA: ", nrow(datos_sin_na)))
 ```
@@ -254,7 +258,7 @@ set.seed(897)
 training_rf <- sample_frac(datos_sin_na, .7) 
 test_rf <- setdiff(datos_sin_na, training_rf)
 
-rf_1 <- randomForest(uso ~ dpto + vol_anual + tipo_ext, data= training_rf, ntree = 150)
+rf_1 <- randomForest(uso ~ dpto + vol_anual + tipo_ext + dif_dias_ini_fin, data= training_rf, ntree = 150)
 prediccion_3 <- predict(rf_1, newdata = test_rf, type = "class")
 confusionMatrix(prediccion_3, test_rf[["uso"]])
 
@@ -283,7 +287,7 @@ tabla_usos_nc
 ```
 
 ```{r}
-set.seed(123321)
+set.seed(897)
 
 # Dividimos la muestra en subconjunto de entrenamiento y test
 training_nc <- sample_frac(datos_nueva_clasificacion, .7) 
@@ -291,7 +295,7 @@ test_nc <- setdiff(datos_nueva_clasificacion, training_nc)
 ```
 
 ```{r}
-rf_nc_1 <- randomForest(uso ~ dpto + vol_anual + tipo_ext, data= training_nc, ntree = 10)
+rf_nc_1 <- randomForest(uso ~ dpto + vol_anual + tipo_ext + dif_dias_ini_fin, data= training_nc, ntree = 180)
 prediccion_nc_1 <- predict(rf_nc_1, newdata = test_nc, type = "class")
 confusionMatrix(prediccion_nc_1, test_nc[["uso"]])
 ```
