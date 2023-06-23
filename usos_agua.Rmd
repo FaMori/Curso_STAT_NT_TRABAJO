@@ -8,14 +8,7 @@ output: pdf_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning =FALSE)
 library(here)
-library(readxl)
 library(tidyverse)
-library(geouy)
-library(xtable)
-library(rpart)
-library(rpart.plot)
-library(caret)
-library(randomForest)
 ```
 
 # Introducción
@@ -34,13 +27,13 @@ Por último, crearemos un modelo predictivo con el objetivo de predecir el uso d
 
 # Datos
 
-```{r}
+```{r, echo=FALSE,message=FALSE}
 datos <- read_csv2(here("Datos","aprovechamientos_2023.csv"))
 datos_19 <- read_csv2(here("Datos","aprovechamientos_2019.csv"))
 ```
+
 ```{r, include=FALSE}
 summary(datos)
-summary(datos_19)
 ```
 
 ```{r}
@@ -50,22 +43,20 @@ datos_l <- datos %>%
            rename("cod_reg"= "nro_gex","nom_reg"= "Nombre","dpto"= "departamento",
                   "vol_anual"="Volumen Anual (m3)","tipo_ext"="Categoría","mes_anio"="Meses/Año") %>%
            rename_all(tolower) %>%
-           mutate(dpto =factor(dpto),uso =factor(uso),destino =factor(destino),
-                  codcuenca=factor(codcuenca)) %>%
+           mutate(dpto =factor(dpto),uso =factor(uso),destino =factor(destino)) %>%
            mutate(codcuenca_nv1=factor(substr(codcuenca, 1, 1))) %>%
            mutate(tipo_ext = str_to_title(tipo_ext),nom_reg=toupper(nom_reg)) %>%
            mutate(tipo_ext = case_when(tipo_ext == "Pozoestudio" ~ "Pozo",.default=tipo_ext)) %>%
            mutate(tipo_ext = factor(tipo_ext)) %>%
            mutate(inicio = as.Date(inicio)) %>%
            mutate(fin = as.Date(fin)) %>%
-           mutate(dif_dias_ini_fin = difftime(fin, inicio, units = "days"))
-
+           mutate(dias_permiso = difftime(fin, inicio, units = "days")) %>%
+           mutate(vol_anual = vol_anual/1e6)
 
 datos_coord <- datos_19 %>%
-               filter(Lat < 0) %>%
-               filter(Lon < 0) %>% 
+               filter(Lat < 0,Lon < 0) %>%
                rename("cod_reg"="Nro. GEX","lat"="Lat","lon"="Lon") %>%
-               select(cod_reg,lat,lon)
+               select(cod_reg,lat,lon) 
 
 datos_l <- left_join(datos_l,datos_coord,by="cod_reg")
 ```
@@ -75,7 +66,8 @@ Como se mencionó, los datos utilizados pertenecen a la Dirección Nacional del 
 Las principales variables de interes a analizar de los datos son:
 
 ```{r,echo=FALSE}
-t_datos <- tibble("Nombre Variable" = names(datos_l),
+library(kableExtra)
+meta_datos <- tibble("Nombre Variable" = names(datos_l),
                   "Descripción" = c("Refiere al codigo identificador de la solicitud de extraccion frente a la DINAGUA.",
                                    "Nombre de la empresa, ente o persona registrada.", 
                                    "Departamento donde se encuentra la obra de extracción", 
@@ -91,65 +83,44 @@ t_datos <- tibble("Nombre Variable" = names(datos_l),
                                    "Diferencia en días entre la fecha inicio y fin", 
                                    "Coordenadas de latitud de la obra de extraccion", 
                                    "Coordenadas de longitud de la obra de extraccion"))
-meta_datos <- xtable(t_datos,include.rownames = FALSE)
+
 ```
 
 ```{r, echo=FALSE, results='asis'}
-print(meta_datos,size = "\\footnotesize",comment=FALSE)
+kable(meta_datos, format = "markdown", col.names = c("Nombre Variable", "Descripción")) %>%
+  kable_styling(font_size = 5) 
 ```
 
-```{r}
-map_c <- load_geouy("Cuencas hidro N2") %>%
+```{r, echo = FALSE,message=FALSE}
+library(geouy)
+
+mapa <- load_geouy("Cuencas hidro N2") %>%
          mutate(nombrec2=iconv(nombrec2, from = "ISO-8859-1", to = "UTF-8"),
-         popup=iconv(popup, from = "ISO-8859-1", to = "UTF-8"),codcuenca=factor(codcuenca))
+         popup=iconv(popup, from = "ISO-8859-1", to = "UTF-8"))
 
-uso_c <- datos_l %>%
-         group_by(codcuenca,uso) %>%
-         summarise(n_uso=n()) %>%
-         slice_max(order_by = n_uso, n = 1) 
+reg_cuenca <- datos_l %>%
+              group_by(codcuenca) %>%
+              summarise(n_reg=n())
 
-reg_c <- datos_l %>%
-         group_by(codcuenca) %>%
-         summarise(n_reg=n())
-
-destagr_c <- datos_l %>%
-             filter(uso %in% c("Riego","Otros usos agropecuarios")) %>%
-             group_by(codcuenca,destino) %>%
-             summarise(n_dest_agro=n()) %>%
-             rename("dest_agro"="destino") %>%
-             slice_max(order_by = n_dest_agro, n = 1) 
+uso_cuenca <- datos_l %>%
+              group_by(codcuenca,uso) %>%
+              summarise(vol_anual_uso = sum(vol_anual)) %>%
+              slice_max(order_by = vol_anual_uso, n = 1) 
+          
+dest_cuenca <- datos_l %>%
+               group_by(codcuenca,destino) %>%
+               summarise(vol_anual_dest = sum(vol_anual)) %>%
+               slice_max(order_by = vol_anual_dest, n = 1) 
               
-vol_c <- datos_l %>% 
-         group_by(codcuenca) %>%
-         summarise(vol_anual = sum(vol_anual))
+vol_cuenca <- datos_l %>% 
+              group_by(codcuenca) %>%
+              summarise(vol_anual = sum(vol_anual))
 
-datos_c <- left_join(map_c, uso_c, by = "codcuenca") %>% 
-           left_join(destagr_c, by = "codcuenca") %>%
-           left_join(reg_c, by = "codcuenca") %>%
-           left_join(vol_c, by = "codcuenca")
+datos_cuenca <- left_join(mapa, reg_cuenca, by = "codcuenca") %>% 
+                left_join(uso_cuenca, by = "codcuenca") %>%
+                left_join(dest_cuenca, by = "codcuenca") %>%
+                left_join(vol_cuenca, by = "codcuenca")
 ```
-
-
-## Cuencas hidrograficas catalogadas por uso mayoritario
-
-```{r}
-plotm_uso <- ggplot() + geom_sf(data=datos_c,aes(fill=uso))
-plotm_uso
-```
-
-
-```{r}
-plotm_destagr <- ggplot() + geom_sf(data=datos_c,aes(fill=dest_agro))
-plotm_destagr
-```
-
-
-```{r}
-plotm_vol <- ggplot() + geom_sf(data=datos_c,aes(fill=vol_anual)) + scale_fill_viridis_c(name="Volumen anual disponible (m3)",end = 0.9)
-plotm_vol
-```
-
-# Principales usos 
 
 ## Numero de registros por uso
 
@@ -163,139 +134,150 @@ reg_uso <- datos_l %>%
 ```{r}
 reg_uso
 ```
-# Riego
 
-## Cantidad de registros por cultivo
+## Cuencas hidrograficas catalogadas por uso mayoritario
 
-```{r,echo=FALSE}
-reg_cult <- datos_l %>%
-           filter(uso == "Riego",!destino %in% c("Sistema de riego","Otros")) %>%
-           group_by(destino) %>%
-           ggplot() + geom_bar(aes(x=fct_infreq(destino),fill=destino)) + 
-           scale_y_continuous(name="Cantidad de registros por cultivo") + scale_x_discrete(name="Cultivo") + coord_flip() +                         theme(legend.position = "none")
-```
-
-```{r,echo=FALSE}
-reg_cult
-```
-## Volumenes anuales por cultivo
-
-```{r,echo=FALSE}
-vol_cult <- datos_l %>%
-           filter(uso == "Riego",!destino %in% c("Sistema de riego","Otros")) %>%
-           group_by(destino) %>%
-           summarise(vol = sum(vol_anual)) %>%
-           ggplot() + geom_bar(aes(x=reorder(destino,vol,decreasing = TRUE),y=vol,fill=destino),stat="identity") + 
-           scale_y_continuous(name="Volumen anual disponible por cultivo (m3)") + scale_x_discrete(name="Cultivo") + coord_flip() + theme(legend.position = "none")
-```
-
-```{r,echo=FALSE}
-vol_cult
-```
 ```{r}
-tabla_usos <- datos_l %>%
-  select(uso) %>%
-  group_by(uso) %>%
-  summarise(Cantidad=n()) %>%
-  mutate(Porcentaje = round(((Cantidad/sum(Cantidad))*100), 2)) %>%
-  mutate(Proporcion = round((Cantidad/sum(Cantidad)), 4)) %>%
-  arrange(., desc(Porcentaje))
-
-tabla_usos
+plotm_uso <- ggplot() + geom_sf(data=datos_cuenca,aes(fill=uso)) + 
+             theme(axis.text = element_blank(),axis.ticks = element_blank()) + scale_fill_discrete(name="Uso mayoritario")
 ```
 
 ```{r}
-set.seed(623)
-
-# Dividimos la muestra en subconjunto de entrenamiento y test
-training <- sample_frac(datos_l, .7) 
-test <- setdiff(datos_l, training)
+plotm_uso
 ```
+
+## Cuencas hidrograficas catalogadas por destino mayoritario y volumen anual disponible
+
+```{r}
+plotm_dest <- ggplot(data = datos_cuenca) +
+  geom_sf(aes(fill = destino)) +
+  stat_sf_coordinates(aes(size = vol_anual_dest), alpha = 0.5, color="darkblue") +
+  theme(axis.text = element_blank(), axis.ticks = element_blank(), axis.title = element_blank()) +
+  scale_fill_discrete(name = "Destino") +
+  scale_size_continuous(name = "Volumen Anual (millones de m3)", range = c(1,11))
+```
+
+```{r}
+plotm_dest
+```
+## Cuencas hidrograficas catalogadas por volumen anual disponible
+
+```{r}
+plotm_vol <- ggplot() + geom_sf(data=datos_cuenca,aes(fill=vol_anual)) + scale_fill_viridis_c(name="Volumen Anual(millones de m3)")  +
+  theme(axis.text = element_blank(), axis.ticks = element_blank(), axis.title = element_blank()) 
+```
+
+```{r}
+plotm_vol
+```
+
+## Volumen anual permitido distribuido por uso 
+
+```{r,echo=FALSE,eval=FALSE}
+library(networkD3)
+uso_sankey <- datos_l %>%
+              group_by(uso) %>%
+              summarise(vol_anual = sum(vol_anual))
+
+dest_sankey <- datos_l %>%
+               filter(uso == "Riego") %>%
+               mutate(destino = case_when(destino %in% c("Caña de azúcar","Otros","Hortalizas") ~ "Otros cultivos",
+                                          .default = destino)) %>%
+               group_by(destino) %>%
+               summarise(vol_anual = sum(vol_anual))
+
+links_sankey <- data.frame(
+  source = c(rep("Volumen Anual Disponible",length(uso_sankey$uso)),
+             rep("Riego",length(dest_sankey$destino))), 
+  target = c(levels(uso_sankey$uso),dest_sankey$destino), 
+  value = c(uso_sankey$vol_anual,dest_sankey$vol_anual)  
+)
+
+nodos_sankey <- data.frame(
+  name=c(as.character(links_sankey$source), 
+  as.character(links_sankey$target)) %>% unique()
+)
+
+links_sankey$IDsource <- match(links_sankey$source, nodos_sankey$name)-1 
+links_sankey$IDtarget <- match(links_sankey$target, nodos_sankey$name)-1
+
+sankey_vol <- sankeyNetwork(Links = links_sankey, Nodes = nodos_sankey,
+              Source = "IDsource", Target = "IDtarget",
+              Value = "value", NodeID = "name", 
+              sinksRight=FALSE)
+
+sankey_vol
+```
+
+# MODELOS 
+
+```{r}
+library(rpart)
+library(rpart.plot)
+library(caret)
+library(randomForest)
+
+set.seed(1234)
+
+datos_mod <- datos_l %>%
+             select(uso,vol_anual,mes_anio,tipo_ext,codcuenca,dias_permiso,codcuenca,dpto) %>%
+             mutate(uso = case_when(uso %in% c("Usos No Consuntivos","Consumo Humano")~"Otros Usos",.default=uso)) %>%
+             na.omit() %>%
+             mutate(uso=factor(uso))
+
+datos_training <- sample_frac(datos_mod, .7)
+datos_test <- setdiff(datos_mod, datos_training)
+```
+
+## Arbol 
 
 ```{r}
 # Usamos rpart para estimar el árbol
-arbol_1 <- rpart(formula = uso ~ dpto + vol_anual + tipo_ext + dif_dias_ini_fin, data = training)
+arbol_1 <- rpart(formula = uso ~ dpto + vol_anual + tipo_ext + dias_permiso, data = datos_training)
 ```
+
 ```{r}
 rpart.plot(arbol_1)
 ```
 
 ```{r}
-prediccion_1 <- predict(arbol_1, newdata = test, type = "class")
-confusionMatrix(prediccion_1, test[["uso"]])
+prediccion_1 <- predict(arbol_1, newdata = datos_test, type = "class")
+confusionMatrix(prediccion_1, datos_test[["uso"]])
 ```
 
 Vamos a tratar el desbalance
 ```{r}
-training <- left_join(training, tabla_usos, by="uso")
+
+tabla_usos <- datos_mod %>%
+              group_by(uso) %>%
+              summarise(cantidad=n()) %>%
+              mutate(porcentaje = round(((cantidad/sum(cantidad))*100), 2),
+                     proporcion = round((cantidad/sum(cantidad)), 4)) %>%
+              select(uso,proporcion)
+
+tabla_usos
+
+datos_arbol_2 <- left_join(datos_training, tabla_usos, by="uso")
 ```
 
 ```{r}
-arbol_2 <- rpart(formula = uso ~ dpto + vol_anual + tipo_ext + dif_dias_ini_fin, data = training, weight = Proporcion)
+arbol_2 <- rpart(formula = uso ~ dpto + vol_anual + tipo_ext + dias_permiso, data = datos_arbol_2, weight = proporcion)
 
 rpart.plot(arbol_2)
 ```
 
 ```{r}
-prediccion_2 <- predict(arbol_2, newdata = test, type = "class")
-confusionMatrix(prediccion_2, test[["uso"]])
+prediccion_2 <- predict(arbol_2, newdata = datos_test, type = "class")
+confusionMatrix(prediccion_2, datos_test[["uso"]])
 ```
 
 No se observa una mejor performance, por lo que vamos a probar con un Random Forest
 
-```{r}
-print(paste("Cantidad de registros totales: ", nrow(datos_l)))
-
-datos_sin_na <- datos_l %>%
-  filter(!is.na(dpto) & !is.na(vol_anual) & !is.na(tipo_ext) & !is.na(dif_dias_ini_fin) & dif_dias_ini_fin >= 0)
-
-print(paste("Cantidad de registros sin NA: ", nrow(datos_sin_na)))
-```
-```{r}
-set.seed(897)
-
-# Divide muestra en subconjunto de entrenamiento y test
-training_rf <- sample_frac(datos_sin_na, .7) 
-test_rf <- setdiff(datos_sin_na, training_rf)
-
-rf_1 <- randomForest(uso ~ dpto + vol_anual + tipo_ext + dif_dias_ini_fin, data= training_rf, ntree = 150)
-prediccion_3 <- predict(rf_1, newdata = test_rf, type = "class")
-confusionMatrix(prediccion_3, test_rf[["uso"]])
-
-```
-
-Probemos clasificar en:
-- Riego
-- Otros usos agrpecuarios
-- Industrial
-- Otros
+## Random Forest
 
 ```{r}
-datos_nueva_clasificacion <- datos_sin_na %>% mutate(uso = as.character(uso))
-datos_nueva_clasificacion <- mutate(datos_nueva_clasificacion, uso = ifelse(uso %in% c("Riego", "Otros Usos Agropecuarios", "Industrial"), uso, "Otros")) %>%
-  mutate(uso = factor(uso))
-
-tabla_usos_nc <- datos_nueva_clasificacion %>%
-  select(uso) %>%
-  group_by(uso) %>%
-  summarise(Cantidad=n()) %>%
-  mutate(Porcentaje = round(((Cantidad/sum(Cantidad))*100), 2)) %>%
-  mutate(Proporcion = round((Cantidad/sum(Cantidad)), 4)) %>%
-  arrange(., desc(Porcentaje))
-
-tabla_usos_nc
+rf_1 <- randomForest(uso ~ codcuenca + vol_anual + tipo_ext + dias_permiso, data= datos_training, ntree = 150)
+prediccion_3 <- predict(rf_1, newdata = datos_test, type = "class")
+confusionMatrix(prediccion_3, datos_test[["uso"]])
 ```
 
-```{r}
-set.seed(897)
-
-# Dividimos la muestra en subconjunto de entrenamiento y test
-training_nc <- sample_frac(datos_nueva_clasificacion, .7) 
-test_nc <- setdiff(datos_nueva_clasificacion, training_nc)
-```
-
-```{r}
-rf_nc_1 <- randomForest(uso ~ dpto + vol_anual + tipo_ext + dif_dias_ini_fin, data= training_nc, ntree = 180)
-prediccion_nc_1 <- predict(rf_nc_1, newdata = test_nc, type = "class")
-confusionMatrix(prediccion_nc_1, test_nc[["uso"]])
-```
