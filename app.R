@@ -109,7 +109,8 @@ server <- function(input, output, session) {
   })
   
   output$tabla <- renderSankeyNetwork({
-    
+  
+    #DEFINO LOS DATOS QUE SE USAN DEPENDIENDO DEL MAPA  
     if (is.null(input$mapa_selected)) {
       datos_sk <- datos()
     } else {
@@ -122,6 +123,7 @@ server <- function(input, output, session) {
                     group_by(uso,destino) %>%
                     summarise(vol_anual = sum(v_anual)) 
     
+    #CREO LOS LINKS DEL DIAGRAMA SANKEY
     links_sankey <- data.frame(
       source = c(rep("Volumen Anual Disponible",length(datos_sankey$uso)),
                  datos_sankey$uso), 
@@ -129,17 +131,19 @@ server <- function(input, output, session) {
       value = c(datos_sankey$vol_anual,datos_sankey$vol_anual)  
     ) 
     
+    #DEFINO LOS LINKS EN CASO QUE SE SELECCIONE TODOS O SE FILTRE POR USO
     if(input$uso_selector != "Todos"){links_sankey  <- filter(links_sankey,source != "Volumen Anual Disponible")}
     else{links_sankey  <- filter(links_sankey,target != "Otros")}
     
+    #DEFINO LOS NODOS DEL DIAGRAMA
     nodos_sankey <- data.frame(
       name=c(as.character(links_sankey$source), 
              as.character(links_sankey$target)) %>% unique()
     )
-    
     links_sankey$IDsource <- match(links_sankey$source, nodos_sankey$name)-1 
     links_sankey$IDtarget <- match(links_sankey$target, nodos_sankey$name)-1
     
+    #CREO EL DIAGRAMA
     sankey_vol <- sankeyNetwork(Links = links_sankey, Nodes = nodos_sankey,
                                 Source = "IDsource", Target = "IDtarget",
                                 Value = "value", NodeID = "name", 
