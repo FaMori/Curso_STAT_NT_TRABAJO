@@ -98,20 +98,24 @@ mapa <- load_geouy("Cuencas hidro N2") %>%
          mutate(nombrec2=iconv(nombrec2, from = "ISO-8859-1", to = "UTF-8"),
          popup=iconv(popup, from = "ISO-8859-1", to = "UTF-8"))
 
+# Cantidad de registros por cuenca
 reg_cuenca <- datos_l %>%
               group_by(codcuenca) %>%
               summarise(n_reg=n())
 
+# Uso con mayor volumen por cuenca
 uso_cuenca <- datos_l %>%
               group_by(codcuenca,uso) %>%
               summarise(vol_anual_uso = sum(vol_anual)) %>%
               slice_max(order_by = vol_anual_uso, n = 1) 
-          
+
+# Destino con mayor volumen por cuenca          
 dest_cuenca <- datos_l %>%
                group_by(codcuenca,destino) %>%
                summarise(vol_anual_dest = sum(vol_anual)) %>%
                slice_max(order_by = vol_anual_dest, n = 1) 
               
+# Volumen total por cuenca
 vol_cuenca <- datos_l %>% 
               group_by(codcuenca) %>%
               summarise(vol_anual = sum(vol_anual))
@@ -122,7 +126,7 @@ datos_cuenca <- left_join(mapa, reg_cuenca, by = "codcuenca") %>%
                 left_join(vol_cuenca, by = "codcuenca")
 ```
 
-## Numero de registros por uso
+## Cantidad de registros por uso
 
 ```{r,echo=FALSE}
 reg_uso <- datos_l %>%
@@ -132,6 +136,7 @@ reg_uso <- datos_l %>%
 ```
 
 ```{r}
+#Gráfico de barras que muestra la cantidad de solicitudes agrupadas según su uso
 reg_uso
 ```
 
@@ -143,10 +148,11 @@ plotm_uso <- ggplot() + geom_sf(data=datos_cuenca,aes(fill=uso)) +
 ```
 
 ```{r}
+# Mapa fraccionado por cuencas nivel 2, reflejando el uso que tiene el mayor volumen máximo de agua autorizado para cada cuenca
 plotm_uso
 ```
 
-## Cuencas hidrograficas catalogadas por destino mayoritario y volumen anual disponible
+## Cuencas hidrográficas catalogadas por destino mayoritario y volumen anual disponible
 
 ```{r}
 plotm_dest <- ggplot(data = datos_cuenca) +
@@ -158,6 +164,7 @@ plotm_dest <- ggplot(data = datos_cuenca) +
 ```
 
 ```{r}
+# Mapa fraccionado por cuencas nivel 2, reflejando el destino que tiene el mayor volumen máximo de agua autorizado para cada cuenca, y el volumen total según el máximo uso
 plotm_dest
 ```
 ## Cuencas hidrograficas catalogadas por volumen anual disponible
@@ -168,6 +175,7 @@ plotm_vol <- ggplot() + geom_sf(data=datos_cuenca,aes(fill=vol_anual)) + scale_f
 ```
 
 ```{r}
+#Mapa fraccionado por cuencas nivel 2, que refleja el volumen total autorizado para cada una
 plotm_vol
 ```
 
@@ -175,10 +183,13 @@ plotm_vol
 
 ```{r,echo=FALSE,eval=FALSE}
 library(networkD3)
+
+# Suma total de volumen por uso
 uso_sankey <- datos_l %>%
               group_by(uso) %>%
               summarise(vol_anual = sum(vol_anual))
 
+# Suma total de volumen por destino, para el uso Riego
 dest_sankey <- datos_l %>%
                filter(uso == "Riego") %>%
                mutate(destino = case_when(destino %in% c("Caña de azúcar","Otros","Hortalizas") ~ "Otros cultivos",
@@ -209,7 +220,15 @@ sankey_vol <- sankeyNetwork(Links = links_sankey, Nodes = nodos_sankey,
 sankey_vol
 ```
 
+
 # MODELOS 
+
+Se construye un modelo para determinar el Uso que tendrá la soliciud. Para ésto agrupamos los usos "Otros Usos", "Otros Usos Agropecuarios" y "Usos no consuntivos" en uno, quedando la clasificación de la siguiente forma:
+
+  - Riego
+  - Consumo humano
+  - Industrial
+  - Otros
 
 ```{r}
 library(rpart)
@@ -217,14 +236,15 @@ library(rpart.plot)
 library(caret)
 library(randomForest)
 
-set.seed(1234)
+set.seed(358)
 
 datos_mod <- datos_l %>%
-             select(uso,vol_anual,mes_anio,tipo_ext,codcuenca,dias_permiso,codcuenca,dpto) %>%
+             select(uso,vol_anual,mes_anio,tipo_ext, codcuenca_nv1, codcuenca,dias_permiso,dpto) %>%
              mutate(uso = case_when(uso %in% c("Usos No Consuntivos","Consumo Humano")~"Otros Usos",.default=uso)) %>%
              na.omit() %>%
              mutate(uso=factor(uso))
 
+# Separamos 70% para entrenamient, 30% testeo
 datos_training <- sample_frac(datos_mod, .7)
 datos_test <- setdiff(datos_mod, datos_training)
 ```
@@ -233,7 +253,7 @@ datos_test <- setdiff(datos_mod, datos_training)
 
 ```{r}
 # Usamos rpart para estimar el árbol
-arbol_1 <- rpart(formula = uso ~ dpto + vol_anual + tipo_ext + dias_permiso, data = datos_training)
+arbol_1 <- rpart(formula = uso ~ dpto + vol_anual + tipo_ext + dias_permiso + codcuenca_nv1, data = datos_training)
 ```
 
 ```{r}
@@ -241,27 +261,32 @@ rpart.plot(arbol_1)
 ```
 
 ```{r}
+# Realizamos las predicciones y mostramos la Matriz de resultados
 prediccion_1 <- predict(arbol_1, newdata = datos_test, type = "class")
 confusionMatrix(prediccion_1, datos_test[["uso"]])
 ```
 
-Vamos a tratar el desbalance
 ```{r}
+#Vamos a tratar el desbalance
 
 tabla_usos <- datos_mod %>%
               group_by(uso) %>%
               summarise(cantidad=n()) %>%
               mutate(porcentaje = round(((cantidad/sum(cantidad))*100), 2),
                      proporcion = round((cantidad/sum(cantidad)), 4)) %>%
-              select(uso,proporcion)
-
-tabla_usos
+              select(uso,proporcion) %>% 
+              arrange(., desc(proporcion))
 
 datos_arbol_2 <- left_join(datos_training, tabla_usos, by="uso")
 ```
 
 ```{r}
-arbol_2 <- rpart(formula = uso ~ dpto + vol_anual + tipo_ext + dias_permiso, data = datos_arbol_2, weight = proporcion)
+tabla_usos 
+```
+
+
+```{r}
+arbol_2 <- rpart(formula = uso ~ dpto + vol_anual + tipo_ext + dias_permiso + codcuenca_nv1, data = datos_arbol_2, weight = proporcion)
 
 rpart.plot(arbol_2)
 ```
@@ -276,7 +301,7 @@ No se observa una mejor performance, por lo que vamos a probar con un Random For
 ## Random Forest
 
 ```{r}
-rf_1 <- randomForest(uso ~ codcuenca + vol_anual + tipo_ext + dias_permiso, data= datos_training, ntree = 150)
+rf_1 <- randomForest(uso ~ codcuenca + vol_anual + tipo_ext + dias_permiso + codcuenca_nv1, data= datos_training, ntree = 150)
 prediccion_3 <- predict(rf_1, newdata = datos_test, type = "class")
 confusionMatrix(prediccion_3, datos_test[["uso"]])
 ```
