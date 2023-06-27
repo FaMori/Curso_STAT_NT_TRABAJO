@@ -8,6 +8,7 @@ library(networkD3)
 
 #CARGA DATOS
 datos <- read_csv2(here("Datos","aprovechamientos_app.csv"))
+datosOriginales <- datos
 
 #LIMPIAR DATOS PARA LA APP
 datos_c1 <- datos %>%
@@ -49,7 +50,7 @@ ui <- fluidPage(
           girafeOutput("mapa"),
           sankeyNetworkOutput("tabla")),
         tabPanel("Distribucion de registros",
-                 girafeOutput("registros")))
+                 plotOutput("registros")))
     )
   )
 )
@@ -151,6 +152,40 @@ server <- function(input, output, session) {
     
     sankey_vol
   })
+  
+  output$registros <- renderPlot({
+    
+    uso_seleccionado <- input$uso_selector
+    datos_filtrados <- datosOriginales
+    
+    if(uso_seleccionado == "Todos"){
+      gg <- datos_filtrados %>%
+        group_by(uso) %>%
+        ggplot(aes(x=fct_infreq(uso), fill = uso)) +
+        geom_bar() +
+        scale_y_continuous(name="Cantidad de solicitudes") +
+        scale_x_discrete(name="Uso") +
+        theme(legend.position='none') +
+        labs(title = "Total de solicitudes por uso") +
+        coord_flip()
+      
+    }
+    else{
+      gg <- datos_filtrados %>%
+        filter(uso ==  uso_seleccionado) %>%
+        group_by(destino) %>%
+        ggplot(aes(x=fct_infreq(destino), fill = destino)) +
+        geom_bar() +
+        scale_y_continuous(name="Cantidad de registros") +
+        scale_x_discrete(name="Destino") +
+        theme( legend.position='none')  +
+        labs(title = paste0("Total de solicitudes por destino para el uso: ", uso_seleccionado))+
+        coord_flip()
+      
+    }
+    
+    print(gg)
+    })
 }
 
 shinyApp(ui = ui, server = server) 
