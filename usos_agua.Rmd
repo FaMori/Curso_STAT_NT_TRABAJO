@@ -130,15 +130,38 @@ datos_cuenca <- left_join(mapa, reg_cuenca, by = "codcuenca") %>%
 
 ```{r,echo=FALSE}
 reg_uso <- datos_l %>%
-           group_by(uso) %>%
-           ggplot() + geom_bar(aes(x=fct_infreq(uso),fill=uso)) + 
-           scale_y_continuous(name="Cantidad de registros por uso") + scale_x_discrete(name="Usos") + coord_flip() +                         theme(legend.position = "none")
+  group_by(uso) %>%
+  ggplot() + geom_bar(aes(x=fct_infreq(uso),fill=uso)) +
+  scale_y_continuous(name="Cantidad de registros") + 
+  scale_x_discrete(name="Usos") +
+  coord_flip() +
+  theme(legend.position = "none")
 ```
 
 ```{r}
 #Gráfico de barras que muestra la cantidad de solicitudes agrupadas según su uso
 reg_uso
 ```
+
+## Volumen total por uso
+
+```{r}
+Volumen_total_uso <- datos_l %>%
+  group_by(uso) %>%
+  summarise(volumenTotal = sum(vol_anual)) %>%
+  select(uso, volumenTotal)
+
+plot_vol_uso <- ggplot(Volumen_total_uso, 
+                       aes(x=fct_reorder(uso, -volumenTotal), y = volumenTotal, fill=uso)) +
+  geom_bar(stat = 'identity') +
+  scale_y_continuous(name="Volumen") + 
+  scale_x_discrete(name="Usos") +
+  coord_flip() +
+  theme(legend.position = "none")
+
+plot_vol_uso
+```
+
 
 ## Cuencas hidrograficas catalogadas por uso mayoritario
 
@@ -305,4 +328,3 @@ rf_1 <- randomForest(uso ~ codcuenca + vol_anual + tipo_ext + dias_permiso + cod
 prediccion_3 <- predict(rf_1, newdata = datos_test, type = "class")
 confusionMatrix(prediccion_3, datos_test[["uso"]])
 ```
-
