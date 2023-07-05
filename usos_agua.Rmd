@@ -264,12 +264,10 @@ sankey_vol
 \newpage 
 # MODELOS 
 
-Se construye un modelo para determinar el Uso que tendrá la soliciud. Para ésto agrupamos los usos "Otros Usos", "Otros Usos Agropecuarios" y "Usos no consuntivos" en uno, quedando la clasificación de la siguiente forma:
+Se construye un modelo para determinar si el Uso que tendrá la solicitud de extracción va a ser para Riego, o para otros usos distintos de Riego. La clasificación sería de la siguiente forma:
 
 * Riego
-* Consumo humano
-* Industrial
-* Otros
+* Otros Usos
 
 ```{r}
 library(rpart)
@@ -281,7 +279,7 @@ set.seed(358)
 
 datos_mod <- datos_l %>%
              select(uso,vol_anual,mes_anio,tipo_ext, codcuenca_nv1, codcuenca,dias_permiso,dpto) %>%
-             mutate(uso = case_when(uso %in% c("Usos No Consuntivos","Consumo Humano")~"Otros Usos",.default=uso)) %>%
+             mutate(uso = case_when(uso != "Riego" ~"Otros Usos",.default=uso)) %>%
              na.omit() %>%
              mutate(uso=factor(uso))
 
@@ -355,3 +353,5 @@ rf_1 <- randomForest(uso ~ codcuenca + vol_anual + tipo_ext + dias_permiso + cod
 prediccion_3 <- predict(rf_1, newdata = datos_test, type = "class")
 confusionMatrix(prediccion_3, datos_test[["uso"]])
 ```
+
+*El modelo Random Forest con un Accuracy de 0.87 es el que mejor performa**
