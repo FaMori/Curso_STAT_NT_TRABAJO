@@ -1,12 +1,17 @@
 ---
-title: "Usos de los recursos hidricos en el Uruguay"
+title: "Usos de los recursos hídricos en el Uruguay"
 author: "Facundo Morini, Mariana Ceresa"
 date: "`r Sys.Date()`"
 output: pdf_document
+header-includes:
+  - \usepackage[spanish]{babel}
+  - \usepackage{graphicx}
+  - \usepackage{tabularx}
+  - \usepackage{longtable}
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning =FALSE)
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning =FALSE, fig.align = "center", fig.pos = "H",fig.width=5.5,fig.height=3.5)
 library(here)
 library(tidyverse)
 ```
@@ -18,22 +23,18 @@ A lo largo de los últimos años, el cambio climático y las sequías han impact
 Dentro de este estudio, nos planteamos responder a preguntas fundamentales, tales como:
 
 1. ¿En qué se utiliza la mayor parte del agua que se solicita extraer?
+
 2. ¿Qué sectores de la actividad requieren mayores volúmenes de agua?
+
 3. ¿Qué zonas del país presentan mayores demanda de uso?
 
-Para abordar estas preguntas, realizaremos un análisis de los datos disponibles utilizando las diversas herramientas que proporciona R para el análisis de datos. Buscaremos utilizar y dar visibilidad a la biblioteca Geouy, que facilita el manejo de datos geograficos relacionados con Uruguay de manera sencilla.
-Además, crearemos una aplicación utilizando la biblioteca Shiny, que permitirá visualizar de forma interactiva los resultados obtenidos en el informe. 
-Por último, crearemos un modelo predictivo con el objetivo de predecir el uso del agua utilizando diversas variables de respuesta presentes en los datos. 
+Para abordar estas preguntas, realizaremos un análisis exploratorio de los datos disponibles utilizando las diversas herramientas que proporciona R para el análisis de datos. Crearemos una aplicación utilizando la biblioteca Shiny, que permitirá visualizar de forma interactiva los resultados obtenidos en el informe, principalmente enfocados en responder la tres preguntas que se realizan en el informe.
+Por último, vamos a ajustar un modelo predictivo con el objetivo de predecir el uso del agua utilizando las diversas variables de respuesta presentes en los datos.
 
 # Datos
 
 ```{r, echo=FALSE,message=FALSE}
 datos <- read_csv2(here("Datos","aprovechamientos_2023.csv"))
-datos_19 <- read_csv2(here("Datos","aprovechamientos_2019.csv"))
-```
-
-```{r, include=FALSE}
-summary(datos)
 ```
 
 ```{r}
@@ -43,6 +44,7 @@ datos_l <- datos %>%
            rename("cod_reg"= "nro_gex","nom_reg"= "Nombre","dpto"= "departamento",
                   "vol_anual"="Volumen Anual (m3)","tipo_ext"="Categoría","mes_anio"="Meses/Año") %>%
            rename_all(tolower) %>%
+           distinct(cod_reg, .keep_all = TRUE) %>%
            mutate(dpto =factor(dpto),uso =factor(uso),destino =factor(destino)) %>%
            mutate(codcuenca_nv1=factor(substr(codcuenca, 1, 1))) %>%
            mutate(tipo_ext = str_to_title(tipo_ext),nom_reg=toupper(nom_reg)) %>%
@@ -52,26 +54,20 @@ datos_l <- datos %>%
            mutate(fin = as.Date(fin)) %>%
            mutate(dias_permiso = difftime(fin, inicio, units = "days")) %>%
            mutate(vol_anual = vol_anual/1e6)
-
-datos_coord <- datos_19 %>%
-               filter(Lat < 0,Lon < 0) %>%
-               rename("cod_reg"="Nro. GEX","lat"="Lat","lon"="Lon") %>%
-               select(cod_reg,lat,lon) 
-
-datos_l <- left_join(datos_l,datos_coord,by="cod_reg")
 ```
 
-Como se mencionó, los datos utilizados pertenecen a la Dirección Nacional del Agua. Estos datos comprenden el registro de todas las empresas y entes publicos que realizan extracciones de agua para diversos usos productivos o abastecimiento a la poblacion. Los datos abarca un total de 5405 registros que se encuentran actualmente habilitados a la explotacion de recursos hidricos. 
+Como se mencionó, los datos utilizados pertenecen a la Dirección Nacional del Agua, un ente perteneciente al Ministerio de Ambiente. Estos datos comprenden el registro de todas las empresas y entidades públicas que realizan extracciones de agua para diversos usos productivos o abastecimiento a la población. Los datos abarcan un total de 5167 registros que se encuentran actualmente habilitados para la explotación de recursos hídricos, con 19 variables que van desde el tipo de forma en que se extrae el agua hasta el departamento donde se encuentra la extracción.
 
-Las principales variables de interes a analizar de los datos son:
+\newpage 
+
+Las principales variables de interés a analizar en los datos son:
 
 ```{r,echo=FALSE}
-library(kableExtra)
 meta_datos <- tibble("Nombre Variable" = names(datos_l),
                   "Descripción" = c("Refiere al codigo identificador de la solicitud de extraccion frente a la DINAGUA.",
                                    "Nombre de la empresa, ente o persona registrada.", 
                                    "Departamento donde se encuentra la obra de extracción", 
-                                   "Hace referencia al propósito o destino que se le dará al agua. Los usos se clasifican en consumo humano, uso industrial, riego, otros usos agropecuarios y otros usos adicionales (turismo y recreación, control de incendios, comercio y servicios).", 
+                                   "Hace referencia al propósito o destino que se le dará al agua. Los usos se clasifican en consumo humano, uso industrial, riego, otros usos agropecuarios y otros usos adicionales.", 
                                    "Detalla el lugar o fin específico donde se utilizará el agua, por ejemplo, en el caso del riego, se especifica el tipo de cultivo.", 
                                    "Indica el volumen máximo de agua permitido para la extracción. Este valor depende en parte, por el tipo de obra utilizada para la extracción.", 
                                    "Fecha en la que se inicia la solicitud de extracción",
@@ -80,23 +76,23 @@ meta_datos <- tibble("Nombre Variable" = names(datos_l),
                                    "Cantidad de meses en el año que se usa el agua que se extrae", 
                                    "Permite identificar la cuenca hidrográfica de nivel 2  a la cual se está realizando la extracción.", 
                                    "Permite identificar la cuenca hidrográfica de nivel 1 a la cual se está realizando la extracción.",
-                                   "Diferencia en días entre la fecha inicio y fin", 
-                                   "Coordenadas de latitud de la obra de extraccion", 
-                                   "Coordenadas de longitud de la obra de extraccion"))
+                                   "Diferencia en días entre la fecha inicio y fin"))
 
 ```
 
-```{r, echo=FALSE, results='asis'}
-kable(meta_datos, format = "markdown", col.names = c("Nombre Variable", "Descripción")) %>%
-  kable_styling(font_size = 5) 
+```{r, echo=FALSE,results='asis'}
+tabla_md <- knitr::kable(meta_datos, format = "latex", booktabs = TRUE) %>%
+            kableExtra::kable_styling( latex_options = c("striped", "hold_position"))%>%
+            kableExtra::column_spec(2, width = "40em")
+print(tabla_md, include.rownames = FALSE, caption = "Metadatos")
 ```
 
-```{r, echo = FALSE,message=FALSE}
+```{r, echo = FALSE,message=FALSE,warning=FALSE,results='hide'}
 library(geouy)
 
-mapa <- load_geouy("Cuencas hidro N2") %>%
+invisible({mapa <- load_geouy("Cuencas hidro N2") %>%
          mutate(nombrec2=iconv(nombrec2, from = "ISO-8859-1", to = "UTF-8"),
-         popup=iconv(popup, from = "ISO-8859-1", to = "UTF-8"))
+         popup=iconv(popup, from = "ISO-8859-1", to = "UTF-8"))})  
 
 # Cantidad de registros por cuenca
 reg_cuenca <- datos_l %>%
@@ -126,10 +122,10 @@ datos_cuenca <- left_join(mapa, reg_cuenca, by = "codcuenca") %>%
                 left_join(vol_cuenca, by = "codcuenca")
 ```
 
-\newpage 
-## Cantidad de registros por uso
+# Análisis exploratorio de los datos
 
-El siguiente gráfico muestra la cantidad total de solicitudes de extracción agrupadas por el Uso de la misma. 
+Con el objetivo de responder las preguntas planteadas, se centrará en el volumen anual permitido de extracción de agua, así como en el uso y destino asignado a la misma. También se tomará en cuenta la cuenca hidrográfica de origen de la extracción. Para llevar a cabo este análisis, utilizaremos la librería GeoUY, la cual nos facilita el uso de datos geográficos de Uruguay de manera cómoda y sencilla en R.
+El siguiente gráfico muestra la cantidad total de solicitudes de extracción agrupadas por su uso. En Uruguay, un país cuya producción está estrechamente vinculada al sector agrícola, se observa una marcada mayoría de empresas que realizan extracciones para uso agropecuario, tanto para riego como para otros fines, que incluyen el uso para abrevaderos de ganado, tambos, entre otros.
 
 ```{r,echo=FALSE}
 reg_uso <- datos_l %>%
@@ -141,109 +137,121 @@ reg_uso <- datos_l %>%
   theme(legend.position = "none")
 ```
 
-```{r}
+```{r,fig.cap="Cantidad de registros por uso"}
 #Gráfico de barras que muestra la cantidad de solicitudes agrupadas según su uso
 reg_uso
 ```
 
-\newpage 
-## Volumen total por uso
+En principio, parece que los usos agropecuarios representarán la mayoría del consumo de agua. Ahora, analicemos el volumen anual permitido de extracción según los diferentes usos.
 
-De forma análoga al gráfico anterio, el siguiente muestra el volumen total autorizado agrupados por Uso.
-
-```{r}
-Volumen_total_uso <- datos_l %>%
+```{r, fig.cap="Volumen anual disponible por uso"}
+volumen_total_uso <- datos_l %>%
   group_by(uso) %>%
-  summarise(volumenTotal = sum(vol_anual)) %>%
-  select(uso, volumenTotal)
+  summarise(volumentotal = sum(vol_anual)) %>%
+  select(uso, volumentotal)
 
-plot_vol_uso <- ggplot(Volumen_total_uso, 
-                       aes(x=fct_reorder(uso, -volumenTotal), y = volumenTotal, fill=uso)) +
+plot_vol_uso <- ggplot(volumen_total_uso, 
+                       aes(x=fct_reorder(uso, -volumentotal), y = volumentotal, fill=uso)) +
   geom_bar(stat = 'identity') +
-  scale_y_continuous(name="Volumen") + 
+  scale_y_continuous(name="Volumen (miles de m3)") + 
   scale_x_discrete(name="Usos") +
   coord_flip() +
   theme(legend.position = "none")
 
 plot_vol_uso
 ```
-**En los dos gráficos anteriores puede visualizarse cómo el Riego es el uso que posee tanto mayor cantidad de solicitudes, como de volumen autorizado para extraer.**
 
-\newpage 
-## Cuencas hidrograficas catalogadas por uso mayoritario
+Observamos una marcada diferencia en el volumen destinado al riego en comparación con los demás usos, lo cual es significativo. Aproximadamente el 80% del volumen anual permitido de extracción en el país se destina al riego.
 
-El siguiente gráfico nos muestra, para cada cuenca de nivel 2, cuál es el Uso con mayor volumen autorizado. Una vez más, Riego es el que encabeza el listado para la mayoría de las cuencas. 
+Dado que el riego pareciera ser el uso mayoritario del agua, vamos a examinar cómo se distribuye en todo Uruguay el uso del agua. El siguiente gráfico muestra, para cada cuenca hidrográfica, cuál es el uso con el mayor volumen autorizado en cada cuenca. 
 
 ```{r}
 plotm_uso <- ggplot() + geom_sf(data=datos_cuenca,aes(fill=uso)) + 
              theme(axis.text = element_blank(),axis.ticks = element_blank()) + scale_fill_discrete(name="Uso mayoritario")
 ```
 
-```{r}
+```{r, fig.cap="Mapa uso mayoritario en cada cuenca"}
 # Mapa fraccionado por cuencas nivel 2, reflejando el uso que tiene el mayor volumen máximo de agua autorizado para cada cuenca
 plotm_uso
 ```
 
-\newpage 
-## Cuencas hidrográficas catalogadas por destino mayoritario y volumen anual disponible
+Podemos observar cómo lo que hemos visto en los gráficos anteriores se refleja en el mapa, donde casi todas las cuencas del país presentan un uso mayoritario hacia el riego. Además, es interesante notar que en las cuencas del sur del país, donde se concentra una mayor población, el uso mayoritario pasa a ser el consumo humano.
 
-Aquí podemos ver cuál es el desino con mayor volumen para cada cuenca nivel 2. Además también se muestra el rango en el que se encuentra el volumen total para todos los usos y destinos.
+Ahora, examinaremos un gráfico más detallado que diferencie por destinos que se le asignan al agua y el volumen anual permitido para su extracción en cada cuenca. Obteniéndose el siguiente gráfico:
 
 ```{r}
 plotm_dest <- ggplot(data = datos_cuenca) +
   geom_sf(aes(fill = destino)) +
   stat_sf_coordinates(aes(size = vol_anual_dest), alpha = 0.5, color="darkblue") +
-  theme(axis.text = element_blank(), axis.ticks = element_blank(), axis.title = element_blank()) +
+  theme(axis.text = element_blank(), axis.ticks = element_blank(), axis.title = element_blank(),legend.text = element_text(size = 6), legend.title = element_text(size=8),legend.key.height= unit(0.4, 'cm'),
+        legend.key.width= unit(0.4, 'cm')) +
   scale_fill_discrete(name = "Destino") +
-  scale_size_continuous(name = "Volumen Anual (millones de m3)", range = c(1,11))
+  scale_size_continuous(name = "Volumen Anual (millones de m3)", range = c(1,7))
 ```
 
-```{r}
+```{r,fig.cap="Mapa destino mayoritario en cada cuenca y volumen anual permitido a extraer"}
 # Mapa fraccionado por cuencas nivel 2, reflejando el destino que tiene el mayor volumen máximo de agua autorizado para cada cuenca, y el volumen total según el máximo uso
 plotm_dest
 ```
-En el gráfico puede observarse cómo en la mayoría de las cuencas, el destino con mayores volúmenes de agua consumidos es el Arroz, seguido por "Cereales/Oleaginosas".
 
-\newpage 
-## Cuencas hidrograficas catalogadas por volumen anual disponible
-El siguiente mapa muestra el volumen anual total autorizado para cada una de las cuencas:
+En el gráfico se puede observar que en la mayoría de las cuencas, el destino con los mayores volúmenes de agua es el cultivo de Arroz, seguido por el uso de "Cereales/Oleaginosas". Ahora vamos a examinar de manera diferenciada cómo se distribuye el volumen anual permitido para el uso "Riego".
 
 ```{r}
-plotm_vol <- ggplot() + geom_sf(data=datos_cuenca,aes(fill=vol_anual)) + scale_fill_viridis_c(name="Volumen Anual(millones de m3)")  +
-  theme(axis.text = element_blank(), axis.ticks = element_blank(), axis.title = element_blank()) 
+agr_vol <- datos_l %>%
+  filter(uso == "Riego") %>%
+  group_by(destino) %>%
+  summarise(volumentotal = sum(vol_anual))
+
+plot_agr_vol <- ggplot(agr_vol, 
+                       aes(x=fct_reorder(destino, -volumentotal), y = volumentotal, fill=destino)) +
+  geom_bar(stat = 'identity') +
+  scale_y_continuous(name="Volumen (miles de m3)") + 
+  scale_x_discrete(name="Cultivo") +
+  coord_flip() +
+  theme(legend.position = "none")
 ```
+
+```{r, fig.cap="Grafico volumen anual disponible por cultivo"}
+plot_agr_vol
+```
+
+Visto los datos, queda evidente que el cultivo de arroz se posiciona como el destino principal del agua en el país, por encima de cualquier otro cultivo. Al observar los mapas, se destaca claramente cómo en las zonas del este del país, donde el arroz es el cultivo predominante, el volumen de agua utilizado es considerablemente mayor. Por otro lado, en las zonas del sur, se percibe que el consumo humano se presenta como el uso mayoritario, especialmente en las cuencas cercanas a Montevideo. En la zona oeste del país, en cambio, prevalece el uso del agua para la producción de cereales y oleaginosas.
+
+Podemos preguntarnos también quienes tienen el máximo volumen permitido para uso viendo los 10 registros con mayor volumen tenemos los siguientes:
 
 ```{r}
-#Mapa fraccionado por cuencas nivel 2, que refleja el volumen total autorizado para cada una
-plotm_vol
+reg_max <- datos_l %>%
+           arrange(desc(vol_anual)) %>%
+           slice_head(n = 10) %>%
+           select(cod_reg,nom_reg,dpto,uso,vol_anual) %>%
+           rename("Codigo de registro"="cod_reg","Nombre de registro"="nom_reg","Departamento"="dpto",
+                  "Uso"="uso","Volumen anual"="vol_anual")
 ```
 
-\newpage 
-## Volumen anual permitido distribuido por uso 
-El siguiente esquema muestra como se desagrega el volumen total autorizado según su uso, y según cada destino dentro de cada Uso.
+```{r,results='asis'}
+tabla_emp <- knitr::kable(reg_max, format = "latex", booktabs = TRUE) %>%
+            kableExtra::kable_styling( latex_options = c("striped", "hold_position","scale_down"))
+print(tabla_emp, include.rownames = FALSE,caption="Empresas con mayor volumen anual permitido")
+```
 
-```{r, echo=FALSE}
+Al examinar las principales empresas registradas, se observa que las dos primeras corresponden a las plantas de celulosa de UPM. Estas plantas tienen los mayores volúmenes anuales permitidos de extracción, lo cual tiene sentido considerando su producción y dimensiones. Además, se destaca que una gran proporción de los registros en los primeros puestos están relacionados con empresas dedicadas al cultivo del arroz. Esto refuerza aún más las conclusiones previamente observadas en este informe, donde se resalta el arroz como uno de los principales usos que se le daría al agua.
+
+# Aplicacion de Shiny
+
+Para visualizar de manera interactiva los diferentes usos del agua, optamos por utilizar un mapa que muestre los destinos en las distintas cuencas y permita filtrarlos según los usos. Para lograr esto, utilizamos nuevamente los mapas disponibles en la biblioteca 'GeoUY' y la librería 'GGIRAPHE' para crear un mapa interactivo. La idea es crear un mapa que resuma en gran medida lo que hemos observado en el análisis exploratorio.
+
+Después de analizar varias opciones de visualización, los datos se presentan a realizar un diagrama Sankey. Este tipo de diagrama nos permite visualizar de manera bivariada los datos de volúmenes y los diferentes usos del agua, proporcionando una representación clara de como se distribuye el volumen de agua. Utilizaremos "NetworkD3" para la creación de los diagramas una librería que se adapta perfectamente para utilizar en una aplicación Shiny.
+
+
+```{r, eval = FALSE}
 library(networkD3)
 
-# Suma total de volumen por uso
 uso_sankey <- datos_l %>%
               group_by(uso) %>%
               summarise(vol_anual = sum(vol_anual))
 
-# Suma total de volumen por destino, para el uso Riego
-dest_sankey <- datos_l %>%
-               filter(uso == "Riego") %>%
-               mutate(destino = case_when(destino %in% c("Caña de azúcar","Otros","Hortalizas") ~ "Otros cultivos",
-                                          .default = destino)) %>%
-               group_by(destino) %>%
-               summarise(vol_anual = sum(vol_anual))
 
-links_sankey <- data.frame(
-  source = c(rep("Volumen Anual Disponible",length(uso_sankey$uso)),
-             rep("Riego",length(dest_sankey$destino))), 
-  target = c(levels(uso_sankey$uso),dest_sankey$destino), 
-  value = c(uso_sankey$vol_anual,dest_sankey$vol_anual)  
-)
+volsk_total <- sum(uso_sankey$vol_anual)
 
 nodos_sankey <- data.frame(
   name=c(as.character(links_sankey$source), 
@@ -255,14 +263,14 @@ links_sankey$IDtarget <- match(links_sankey$target, nodos_sankey$name)-1
 
 sankey_vol <- sankeyNetwork(Links = links_sankey, Nodes = nodos_sankey,
               Source = "IDsource", Target = "IDtarget",
-              Value = "value", NodeID = "name", 
+              Value = "value", NodeID = "name", width= 600, height = 250,
               sinksRight=FALSE)
 
-sankey_vol
 ```
 
-\newpage 
-# MODELOS 
+![Diagrama Sankey para el volumen anual total](Rplot.png){height=250,width=600}
+
+# Modelo predictivo
 
 Se construye un modelo para determinar si el Uso que tendrá la solicitud de extracción va a ser para Riego, o para otros usos distintos de Riego. La clasificación sería de la siguiente forma:
 

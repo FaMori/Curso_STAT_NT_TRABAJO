@@ -1,14 +1,14 @@
 library(here)
 library(readxl)
 library(tidyverse)
-library(geouy)
+library(sf)
 library(shiny)
 library(ggiraph)
 library(networkD3)
+library(shinyjs)
 
 #CARGA DATOS
-datos <- read_csv2(here("Datos","aprovechamientos_app.csv"))
-datosOriginales <- datos
+datos <- read.csv2(here("Datos","aprovechamientos_app.csv"),encoding='utf-8')
 
 #LIMPIAR DATOS PARA LA APP
 datos_c1 <- datos %>%
@@ -22,35 +22,105 @@ datos_c2 <- datos %>%
             rename("codcuenca"="codcuenca2")
 
 #SE CARGAN LOS MAPAS
-mapa_c1 <- load_geouy("Cuencas hidro N1") %>%
-  mutate(nombrec1=iconv(nombrec1, from = "ISO-8859-1", to = "UTF-8"),
-         popup=iconv(popup, from = "ISO-8859-1", to = "UTF-8")) %>%
-  rename("nomcuenca"="nombrec1")
+mapa_c1 <- st_read(here("Mapas","mapa_c1.shp"))
+mapa_c2 <- st_read(here("Mapas","mapa_c2.shp"))
 
-mapa_c2 <- load_geouy("Cuencas hidro N2") %>%
-  mutate(nombrec2=iconv(nombrec2, from = "ISO-8859-1", to = "UTF-8"),
-         popup=iconv(popup, from = "ISO-8859-1", to = "UTF-8"))%>%
-  rename("nomcuenca"="nombrec2")
 
-#DEFINO LA UI
 ui <- fluidPage(
-  titlePanel("Visualizador de Cuencas"),
-  sidebarLayout(
-    sidebarPanel(
-      selectInput("mapa_selector","Seleccionar Nivel de Cuenca:",
-                  choices = c("Cuencas nivel 1", "Cuencas nivel 2"),
-                  selected = "Cuencas nivel 2"),
-      selectInput("uso_selector", "Filtrar por uso:",
-                  choices = c("Todos","Riego","Industrial","Otros Usos Agropecuarios","Otros Usos"),
-                  selected = "Todos")
+  tags$head(
+    tags$style(HTML("
+      body {
+        background-color: #f5f5f5;
+        width: 100%;
+      }
+      
+      h1 {
+        color: #ffffff; 
+        font-weight: bold;
+      }
+      
+      h3 {
+        margin: 5px;
+      }
+      
+      .container-fluid {
+        padding-left: 0px;
+      }
+      
+      .encabezado {
+        background-color: #004e80; 
+        color: #ffffff;
+        margin-bottom: 10px;
+        padding: 5px;
+      }
+      
+      .col-sm-3{
+        margin-left:15px;
+      }
+      
+      .mapa {
+        background-color: #ffffff;
+        border-radius: 10px; 
+        margin-left: 15px;
+      }
+      
+      .tabla {
+        background-color: #ffffff;
+        border-radius: 10px; 
+      }
+    "))
+  ),
+  
+  useShinyjs(),
+  
+  fluidRow(
+    column(
+      12,
+      div(
+        class = "encabezado",
+        h1("Visualizador de aprovechamiento de recursos hídricos en Uruguay"),
+        actionButton("info", "Información")
+      )
+    )
+  ),
+  
+  fluidRow(
+    column(
+      3,
+      selectInput(
+        "mapa_selector",
+        "Visualizar por nivel de cuenca:",
+        choices = c("Cuencas nivel 1", "Cuencas nivel 2"),
+        selected = "Cuencas nivel 2"
+      )
     ),
-    mainPanel(
-      tabsetPanel(
-        tabPanel("Uso por cuenca",
-          girafeOutput("mapa"),
-          sankeyNetworkOutput("tabla")),
-        tabPanel("Distribucion de registros",
-                 plotOutput("registros")))
+    column(
+      6,
+      selectInput(
+        "uso_selector",
+        "Filtrar por uso:",
+        choices = c("Todos", "Riego", "Industrial", "Otros Usos Agropecuarios", "Otros Usos"),
+        selected = "Todos"
+      )
+    )
+  ),
+  
+  fluidRow(
+    column(
+      5,
+      div(
+        class = "mapa",
+        h3("Uso principal por cuenca hidrográfica"),
+        girafeOutput("mapa")
+      )
+    ),
+    column(
+      6,
+      div(
+        class = "tabla",
+        h3("Distribución del volumen anual por uso"),
+        sankeyNetworkOutput("tabla")
+      )
     )
   )
 )
@@ -99,7 +169,7 @@ server <- function(input, output, session) {
     mapa <- ggplot() +
       geom_sf_interactive(data = df_mapa, color = "black",
                           aes(tooltip = paste(nomcuenca, "\nCantidad de registros: ", n_reg,
-                                              "\nUso: ", uso,
+                                              "\nUso principal: ", uso,
                                               "\nDestino principal: ", destino),fill=!!sym(mapa_fill),
                               data_id = codcuenca),
                           hover_css = "fill:darkblue;", size = 1.5, alpha = 0.8) +  
@@ -153,39 +223,33 @@ server <- function(input, output, session) {
     sankey_vol
   })
   
-  output$registros <- renderPlot({
-    
-    uso_seleccionado <- input$uso_selector
-    datos_filtrados <- datosOriginales
-    
-    if(uso_seleccionado == "Todos"){
-      gg <- datos_filtrados %>%
-        group_by(uso) %>%
-        ggplot(aes(x=fct_infreq(uso), fill = uso)) +
-        geom_bar() +
-        scale_y_continuous(name="Cantidad de solicitudes") +
-        scale_x_discrete(name="Uso") +
-        theme(legend.position='none') +
-        labs(title = "Total de solicitudes por uso") +
-        coord_flip()
-      
-    }
-    else{
-      gg <- datos_filtrados %>%
-        filter(uso ==  uso_seleccionado) %>%
-        group_by(destino) %>%
-        ggplot(aes(x=fct_infreq(destino), fill = destino)) +
-        geom_bar() +
-        scale_y_continuous(name="Cantidad de registros") +
-        scale_x_discrete(name="Destino") +
-        theme( legend.position='none')  +
-        labs(title = paste0("Total de solicitudes por destino para el uso: ", uso_seleccionado))+
-        coord_flip()
-      
-    }
-    
-    print(gg)
-    })
+  observeEvent(input$info, {
+    showModal(
+      modalDialog(
+        title = div(
+          style = "text-align: center;",
+          tags$img(src = "https://pbs.twimg.com/profile_images/960924836137750529/r-XG6uEM_400x400.jpg", height = "100px", width = "100px"),
+          "Proyecto final curso Ciencia de Datos con R"
+        ),
+        HTML("<p>Esta aplicación busca informar en que se utiliza principalmente el agua en Uruguay.</p>
+              <p>En el mapa de 'Uso principal por cuenca hidrográfica', se representa el destino principal que se le da al agua en las diferentes cuencas de Uruguay. 
+              Al pasar por las distintas cuencas se proporciona información adicional, como la cantidad de registros (permisos de extracción).</p>
+              <p>El diagrama de 'Distribución del volumen anual por uso' muestra cómo se distribuye el volumen anual entre los diferentes usos que se le da al agua.</p>
+              <p>Utiliza los selectores ubicados en la parte superior para filtrar los datos según el nivel de cuenca y el uso deseado.
+              También se pueden seleccionar cuencas en el mapa para ver el diagrama de uso específico para esas cuencas.</p>
+              <small>Los volúmenes presentados en esta aplicación se refieren al volumen anual máximo permitido para extraer en m3.</small>
+              <small></small>
+              <br/>
+              <hr/>
+              <p><strong>Fuente de los datos:</strong> DINAGUA, Ministerio de Ambiente.</p>
+              <p><strong>Creadores app:</strong> Facundo Morini, Mariana Ceresa.</p>"
+             ),
+        footer = modalButton("Aceptar"),
+        easyClose = TRUE
+      )
+    )
+  })
+  
 }
 
 shinyApp(ui = ui, server = server) 
