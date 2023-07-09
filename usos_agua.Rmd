@@ -215,8 +215,7 @@ plot_agr_vol <- ggplot(agr_vol,
 plot_agr_vol
 ```
 
-Visto los datos, queda evidente que el cultivo de arroz se posiciona como el destino principal del agua en el país, por encima de cualquier otro cultivo. Al observar los mapas, se destaca claramente cómo en las zonas del este del país, donde el arroz es el cultivo predominante, el volumen de agua utilizado es considerablemente mayor. Por otro lado, en las zonas del sur, se percibe que el consumo humano se presenta como el uso mayoritario, especialmente en las cuencas cercanas a Montevideo. En la zona oeste del país, en cambio, prevalece el uso del agua para la producción de cereales y oleaginosas.
-
+Visto los datos, queda evidente que el cultivo de arroz se posiciona como el cultivo que precisa mas extracción de agua, por encima de cualquier otro cultivo.
 Podemos preguntarnos también quienes tienen el máximo volumen permitido para uso viendo los 10 registros con mayor volumen tenemos los siguientes:
 
 ```{r}
@@ -234,8 +233,11 @@ tabla_emp <- knitr::kable(reg_max, format = "latex", booktabs = TRUE) %>%
 print(tabla_emp, include.rownames = FALSE,caption="Empresas con mayor volumen anual permitido")
 ```
 
-Al examinar las principales empresas registradas, se observa que las dos primeras corresponden a las plantas de celulosa de UPM. Estas plantas tienen los mayores volúmenes anuales permitidos de extracción, lo cual tiene sentido considerando su producción y dimensiones. Además, se destaca que una gran proporción de los registros en los primeros puestos están relacionados con empresas dedicadas al cultivo del arroz. Esto refuerza aún más las conclusiones previamente observadas en este informe, donde se resalta el arroz como uno de los principales usos que se le daría al agua.
+Al examinar las principales empresas registradas, se observa que las dos primeras corresponden a las plantas de celulosa de UPM. Estas plantas tienen los mayores volúmenes anuales permitidos de extracción, lo cual tiene sentido considerando su producción y dimensiones. Además, se destaca que una gran proporción de los registros en los primeros puestos están relacionados con empresas dedicadas al cultivo del arroz. .
 
+
+Como conclusión del análisis de los datos, vemos que el enfoque al agro de la producción uruguaya repercute en los usos que se le da al agua donde es predominantemente utilizada para el riego, se destaca claramente cómo en las zonas del este del país, donde el arroz es el cultivo predominante, el volumen de agua utilizado es considerablemente mayor. Por otro lado, en las zonas del sur se percibe que el consumo humano se presenta como el uso mayoritario, especialmente en las cuencas cercanas a Montevideo. En la zona oeste del país, en cambio, prevalece el uso del agua para la producción de cereales y oleaginosas. Es importante tener en cuenta un detalle de los datos: al solo estar contabilizándose las extracciones, cultivos como el arroz, que requieren un gran traslado de agua para su producción, van a quedar en evidencia. No se podrían sacar conclusiones con los datos disponibles sobre qué cultivos tienen un mejor rendimiento de producción/volumen de agua consumidos, ya que no se estaría considerando, por ejemplo, el efecto que tienen los cultivos de soja en las aguas subterráneas, que no requieren de una extracción y no aparecen en estos datos. Este informe es solo un punto de partida para lo que podrían ser estudios más detallados sobre el tema, haciéndose preguntas como si deberíamos revisar nuestra matriz productiva en pos de asegurar los recursos hídricos en el futuro, o qué efectos tienen otras industrias, como la forestal, que no están contemplados en estos datos en la disponibilidad del agua.
+ 
 # Aplicacion de Shiny
 
 Para visualizar de manera interactiva los diferentes usos del agua, optamos por utilizar un mapa que muestre los destinos en las distintas cuencas y permita filtrarlos según los usos. Para lograr esto, utilizamos nuevamente los mapas disponibles en la biblioteca 'GeoUY' y la librería 'GGIRAPHE' para crear un mapa interactivo. La idea es crear un mapa que resuma en gran medida lo que hemos observado en el análisis exploratorio.
