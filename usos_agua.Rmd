@@ -128,11 +128,14 @@ Con el objetivo de responder las preguntas planteadas, se centrará en el volume
 El siguiente gráfico muestra la cantidad total de solicitudes de extracción agrupadas por su uso. En Uruguay, un país cuya producción está estrechamente vinculada al sector agrícola, se observa una marcada mayoría de empresas que realizan extracciones para uso agropecuario, tanto para riego como para otros fines, que incluyen el uso para abrevaderos de ganado, tambos, entre otros.
 
 ```{r,echo=FALSE}
+paleta_Azules = c("#37abc8","#4a6a9b", "#a8d3d1",  "#6eaba8", "#3056c3", "#708b8a" )
+
 reg_uso <- datos_l %>%
   group_by(uso) %>%
   ggplot() + geom_bar(aes(x=fct_infreq(uso),fill=uso)) +
   scale_y_continuous(name="Cantidad de registros") + 
   scale_x_discrete(name="Usos") +
+  scale_fill_manual(values = paleta_Azules) +
   coord_flip() +
   theme(legend.position = "none")
 ```
@@ -155,6 +158,7 @@ plot_vol_uso <- ggplot(volumen_total_uso,
   geom_bar(stat = 'identity') +
   scale_y_continuous(name="Volumen (miles de m3)") + 
   scale_x_discrete(name="Usos") +
+  scale_fill_manual(values = paleta_Azules) +
   coord_flip() +
   theme(legend.position = "none")
 
@@ -197,6 +201,8 @@ plotm_dest
 En el gráfico se puede observar que en la mayoría de las cuencas, el destino con los mayores volúmenes de agua es el cultivo de Arroz, seguido por el uso de "Cereales/Oleaginosas". Ahora vamos a examinar de manera diferenciada cómo se distribuye el volumen anual permitido para el uso "Riego".
 
 ```{r}
+paleta_AzulesYMarrones = c("#37abc8","#c53d3d","#4a6a9b", "#ebc455",  "#6eaba8", "#ad8733", "#708b8a", "#b16c32" )
+
 agr_vol <- datos_l %>%
   filter(uso == "Riego") %>%
   group_by(destino) %>%
@@ -207,6 +213,7 @@ plot_agr_vol <- ggplot(agr_vol,
   geom_bar(stat = 'identity') +
   scale_y_continuous(name="Volumen (miles de m3)") + 
   scale_x_discrete(name="Cultivo") +
+  scale_fill_manual(values = paleta_AzulesYMarrones) +
   coord_flip() +
   theme(legend.position = "none")
 ```
@@ -237,12 +244,16 @@ Al examinar las principales empresas registradas, se observa que las dos primera
 
 
 Como conclusión del análisis de los datos, vemos que el enfoque al agro de la producción uruguaya repercute en los usos que se le da al agua donde es predominantemente utilizada para el riego, se destaca claramente cómo en las zonas del este del país, donde el arroz es el cultivo predominante, el volumen de agua utilizado es considerablemente mayor. Por otro lado, en las zonas del sur se percibe que el consumo humano se presenta como el uso mayoritario, especialmente en las cuencas cercanas a Montevideo. En la zona oeste del país, en cambio, prevalece el uso del agua para la producción de cereales y oleaginosas. Es importante tener en cuenta un detalle de los datos: al solo estar contabilizándose las extracciones, cultivos como el arroz, que requieren un gran traslado de agua para su producción, van a quedar en evidencia. No se podrían sacar conclusiones con los datos disponibles sobre qué cultivos tienen un mejor rendimiento de producción/volumen de agua consumidos, ya que no se estaría considerando, por ejemplo, el efecto que tienen los cultivos de soja en las aguas subterráneas, que no requieren de una extracción y no aparecen en estos datos. Este informe es solo un punto de partida para lo que podrían ser estudios más detallados sobre el tema, haciéndose preguntas como si deberíamos revisar nuestra matriz productiva en pos de asegurar los recursos hídricos en el futuro, o qué efectos tienen otras industrias, como la forestal, que no están contemplados en estos datos en la disponibilidad del agua.
- 
+
+\newpage 
 # Aplicacion de Shiny
 
 Para visualizar de manera interactiva los diferentes usos del agua, optamos por utilizar un mapa que muestre los destinos en las distintas cuencas y permita filtrarlos según los usos. Para lograr esto, utilizamos nuevamente los mapas disponibles en la biblioteca 'GeoUY' y la librería 'GGIRAPHE' para crear un mapa interactivo. La idea es crear un mapa que resuma en gran medida lo que hemos observado en el análisis exploratorio.
 
 Después de analizar varias opciones de visualización, los datos se presentan a realizar un diagrama Sankey. Este tipo de diagrama nos permite visualizar de manera bivariada los datos de volúmenes y los diferentes usos del agua, proporcionando una representación clara de como se distribuye el volumen de agua. Utilizaremos "NetworkD3" para la creación de los diagramas una librería que se adapta perfectamente para utilizar en una aplicación Shiny.
+
+La aplicación se encuentra publicada en la siguiente ruta:
+https://vdq66d-facundo-morini.shinyapps.io/App_Agua/
 
 
 ```{r, eval = FALSE}
@@ -272,6 +283,7 @@ sankey_vol <- sankeyNetwork(Links = links_sankey, Nodes = nodos_sankey,
 
 ![Diagrama Sankey para el volumen anual total](Rplot.png){height=250,width=600}
 
+\newpage
 # Modelo predictivo
 
 Se construye un modelo para determinar si el Uso que tendrá la solicitud de extracción va a ser para Riego, o para otros usos distintos de Riego. La clasificación sería de la siguiente forma:
@@ -288,7 +300,7 @@ library(randomForest)
 set.seed(358)
 
 datos_mod <- datos_l %>%
-             select(uso,vol_anual,mes_anio,tipo_ext, codcuenca_nv1, codcuenca,dias_permiso,dpto) %>%
+             select(uso,vol_anual,mes_anio,tipo_ext, codcuenca_nv1, codcuenca,dias_permiso,dpto) %>% filter(dias_permiso < 40000 & mes_anio <= 12) %>% # Se quitan registros anormales
              mutate(uso = case_when(uso != "Riego" ~"Otros Usos",.default=uso)) %>%
              na.omit() %>%
              mutate(uso=factor(uso))
@@ -298,32 +310,39 @@ datos_training <- sample_frac(datos_mod, .7)
 datos_test <- setdiff(datos_mod, datos_training)
 ```
 
-## Arbol 
+Vamos a analizar la relación entre nuestra variables estrictamente numéricas; .
 
-**Resultados primer Árbol construido:**
+- Volumen anual
+- Días transcurridos entre el inicio y el fin de la solicitud
 
+```{r, fig.cap="Relación de las variables Volumen Anual y Días entre Inicio y Fin de Solicitud"}
+ggplot(datos_mod, aes(x = vol_anual, y = dias_permiso, color = uso)) +
+  labs( x = "Volumen anual autorizado", y="Días transcurridos entre inicio y fin") +
+  scale_color_manual(values=c('#1D369E','#1D9E75'), name = "Uso") +
+  geom_point(alpha = 0.5)
+
+```
+
+Del gráfico se desprende no solo que los menores volúmenes tienen en general destino “Otros Usos”, sino que aquellas solicitudes con mayor cantidad de días entre inicio y fin, y poco volumen autorizado, son destinados exclusivamente a “Otros Usos” también.
+
+
+\newpage
 ```{r}
+#ARBOL 1
+
 # Usamos rpart para estimar el árbol
 arbol_1 <- rpart(formula = uso ~ dpto + vol_anual + tipo_ext + dias_permiso + codcuenca_nv1, data = datos_training)
-```
 
-```{r}
-rpart.plot(arbol_1)
-```
-
-```{r}
 # Realizamos las predicciones y mostramos la Matriz de resultados
 prediccion_1 <- predict(arbol_1, newdata = datos_test, type = "class")
-confusionMatrix(prediccion_1, datos_test[["uso"]])
+matriz_Confusion_Arbol1 <- confusionMatrix(prediccion_1, datos_test[["uso"]])
 ```
-
-## Arbol 2 - tratando el desbalance
-
-**Debido a que nuestros datos se encuentran desbalanceados, realizamos un segundo árbol en el cual intentamos trabajar dicho desbalance**
 
 Tabla de proporción de Usos según la cantidad de registros:
 ```{r}
-#Vamos a tratar el desbalance
+#ÁRBOL 2 - tratando el desbalance
+
+#La siguiente tabla sirve para tratar el desbalance
 
 tabla_usos <- datos_mod %>%
               group_by(uso) %>%
@@ -344,24 +363,76 @@ tabla_usos
 ```{r}
 arbol_2 <- rpart(formula = uso ~ dpto + vol_anual + tipo_ext + dias_permiso + codcuenca_nv1, data = datos_arbol_2, weight = proporcion)
 
+prediccion_2 <- predict(arbol_2, newdata = datos_test, type = "class")
+matriz_Confusion_Arbol2 <-confusionMatrix(prediccion_2, datos_test[["uso"]])
+```
+
+```{r}
+#Random Forest
+rf_1 <- randomForest(uso ~ codcuenca + vol_anual + tipo_ext + dias_permiso + codcuenca_nv1, data= datos_training, ntree = 150)
+prediccion_3 <- predict(rf_1, newdata = datos_test, type = "class")
+matriz_Confusion_RandomForest <- confusionMatrix(prediccion_3, datos_test[["uso"]])
+```
+
+## Construcción de Modelos
+
+Realizamos tres modelos con los siguientes datos;
+
+- codcuenca
+- vol_anual
+- tipo_ext
+- dias_permiso
+- codcuenca_nv1
+
+Dos árboles, y un Random Forest.
+La diferencia entre el primer Árbol construído y el segundo, fue que con el segundo intentamos mejorar los resultados, tratando el desbalance con el parámetro "weight".
+
+Los diseños de los Árboles son los siguientes:
+
+Árbol 1
+```{r}
+rpart.plot(arbol_1)
+```
+
+\newpage
+Árbol 2
+```{r}
 rpart.plot(arbol_2)
 ```
 
+## Evaluación de modelos
+
+Para poder evaluar nuestros modelos, presentamos en dos tablas los resultados obtenidos:
+
 ```{r}
-prediccion_2 <- predict(arbol_2, newdata = datos_test, type = "class")
-confusionMatrix(prediccion_2, datos_test[["uso"]])
+df_overall <- data.frame(
+  Árbol1 = matriz_Confusion_Arbol1[["overall"]],
+  Árbol2 = matriz_Confusion_Arbol2[["overall"]],
+  RandomForest = matriz_Confusion_RandomForest[["overall"]]
+)
+
+round(df_overall, 2)
+```
+```{r}
+df_byClass <- data.frame(
+  Árbol1 = matriz_Confusion_Arbol1[["byClass"]],
+  Árbol2 = matriz_Confusion_Arbol2[["byClass"]],
+  RandomForest = matriz_Confusion_RandomForest[["byClass"]]
+)
+
+round(df_byClass, 2)
+```
+
+Para la selección del modelo elegimos centrarnos en las siguientes métricas:
+Accuracy:  Fracción de predicciones que el modelo realizó correctamente.
+Sensitivity: Indica la proporción de ejemplos positivos que están identificados correctamente por el modelo entre todos los positivos reales.
+Specificity: Indica la proporción de negativos clasificados correctamente.
+
+Miremos estos valores para los tres modelos ejecutados:
+
+```{r}
+round(rbind(df_overall,df_byClass)[c("Accuracy", "Sensitivity", "Specificity"),], 2)
 ```
 
 
-\newpage 
-## Random Forest
-
-**Probamos mejorar nuestro Accuracy con un Random Forest, obteniendo los siguientes resultados:**
-
-```{r}
-rf_1 <- randomForest(uso ~ codcuenca + vol_anual + tipo_ext + dias_permiso + codcuenca_nv1, data= datos_training, ntree = 150)
-prediccion_3 <- predict(rf_1, newdata = datos_test, type = "class")
-confusionMatrix(prediccion_3, datos_test[["uso"]])
-```
-
-*El modelo Random Forest con un Accuracy de 0.87 es el que mejor performa**
+**Únicamente para la Sensibilidad el modelo de Árbol 2 supera al Random Forest (0.02 "más sensible"), entendemos que al ser pequeña la diferencia, y ser mejor el Random Forest en el resto de los indicadores, es éste último el modelo que seleccionamos para poder predecir el uso final que tendrá una solicitud de extración entre "Riego" y "Otros Usos"**
