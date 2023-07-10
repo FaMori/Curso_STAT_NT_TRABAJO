@@ -253,8 +253,7 @@ Para visualizar de manera interactiva los diferentes usos del agua, optamos por 
 Después de analizar varias opciones de visualización, los datos se presentan a realizar un diagrama Sankey. Este tipo de diagrama nos permite visualizar de manera bivariada los datos de volúmenes y los diferentes usos del agua, proporcionando una representación clara de como se distribuye el volumen de agua. Utilizaremos "NetworkD3" para la creación de los diagramas una librería que se adapta perfectamente para utilizar en una aplicación Shiny.
 
 La aplicación se encuentra publicada en la siguiente ruta:
-https://vdq66d-facundo-morini.shinyapps.io/App_Agua/
-
+[https://vdq66d-facundo-morini.shinyapps.io/App_Agua/](https://vdq66d-facundo-morini.shinyapps.io/App_Agua/)
 
 ```{r, eval = FALSE}
 library(networkD3)
