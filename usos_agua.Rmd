@@ -355,10 +355,15 @@ tabla_usos <- datos_mod %>%
 datos_arbol_2 <- left_join(datos_training, tabla_usos, by="uso")
 ```
 
-```{r}
+```{r, eval=FALSE}
 tabla_usos 
 ```
 
+```{r,results='asis'}
+tabla_proporcio <- knitr::kable(tabla_usos, format = "latex", booktabs = TRUE)%>%
+            kableExtra::kable_styling( latex_options = c("striped", "hold_position"))
+print(tabla_proporcio, include.rownames = FALSE,caption="Proporcion de Usos para el modelo")
+```
 
 ```{r}
 arbol_2 <- rpart(formula = uso ~ dpto + vol_anual + tipo_ext + dias_permiso + codcuenca_nv1, data = datos_arbol_2, weight = proporcion)
@@ -405,34 +410,63 @@ rpart.plot(arbol_2)
 Para poder evaluar nuestros modelos, presentamos en dos tablas los resultados obtenidos:
 
 ```{r}
-df_overall <- data.frame(
+df_overall <- round(data.frame(
   Árbol1 = matriz_Confusion_Arbol1[["overall"]],
   Árbol2 = matriz_Confusion_Arbol2[["overall"]],
   RandomForest = matriz_Confusion_RandomForest[["overall"]]
-)
+), 2)
 
-round(df_overall, 2)
 ```
+```{r, eval=FALSE}
+df_overall
+```
+
+```{r,results='asis'}
+tabla_overall <- knitr::kable(df_overall, format = "latex", booktabs = TRUE)%>%
+            kableExtra::kable_styling( latex_options = c("striped", "hold_position"))
+print(tabla_overall, include.rownames = FALSE,caption="Datos overall")
+```
+
 ```{r}
-df_byClass <- data.frame(
+df_byClass <- round(data.frame(
   Árbol1 = matriz_Confusion_Arbol1[["byClass"]],
   Árbol2 = matriz_Confusion_Arbol2[["byClass"]],
   RandomForest = matriz_Confusion_RandomForest[["byClass"]]
-)
+), 2)
 
-round(df_byClass, 2)
+```
+```{r, eval=FALSE}
+df_byClass
 ```
 
-Para la selección del modelo elegimos centrarnos en las siguientes métricas:
-Accuracy:  Fracción de predicciones que el modelo realizó correctamente.
-Sensitivity: Indica la proporción de ejemplos positivos que están identificados correctamente por el modelo entre todos los positivos reales.
-Specificity: Indica la proporción de negativos clasificados correctamente.
+```{r,results='asis'}
+tabla_byClass <- knitr::kable(df_byClass, format = "latex", booktabs = TRUE)%>%
+            kableExtra::kable_styling( latex_options = c("striped", "hold_position"))
+print(tabla_byClass, include.rownames = FALSE,caption="Datos by Class")
+```
+
+\newpage
+Para la selección del modelo elegimos centrarnos en las siguientes métricas; 
+- Accuracy: Fracción de predicciones que el modelo realizó correctamente. 
+- Sensitivity: Indica la proporción de ejemplos positivos que están identificados correctamente por el modelo entre todos los positivos reales. 
+- Specificity: Indica la proporción de negativos clasificados correctamente.
 
 Miremos estos valores para los tres modelos ejecutados:
 
 ```{r}
-round(rbind(df_overall,df_byClass)[c("Accuracy", "Sensitivity", "Specificity"),], 2)
+df_metricas <- round(rbind(df_overall,df_byClass)[c("Accuracy", "Sensitivity", "Specificity"),], 2)
+```
+```{r, eval=FALSE}
+df_metricas
+```
+
+```{r,results='asis'}
+tabla_metricas <- knitr::kable(df_metricas, format = "latex", booktabs = TRUE)%>%
+            kableExtra::kable_styling( latex_options = c("striped", "hold_position"))
+print(tabla_metricas, include.rownames = FALSE,caption="Datooosss")
 ```
 
 
 **Únicamente para la Sensibilidad el modelo de Árbol 2 supera al Random Forest (0.02 "más sensible"), entendemos que al ser pequeña la diferencia, y ser mejor el Random Forest en el resto de los indicadores, es éste último el modelo que seleccionamos para poder predecir el uso final que tendrá una solicitud de extración entre "Riego" y "Otros Usos"**
+
+
