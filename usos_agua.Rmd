@@ -3,6 +3,7 @@ title: "Usos de los recursos hídricos en el Uruguay"
 author: "Facundo Morini, Mariana Ceresa"
 date: "`r Sys.Date()`"
 output: pdf_document
+bibliography: biblo.bib
 header-includes:
   - \usepackage[spanish]{babel}
   - \usepackage{graphicx}
@@ -248,9 +249,9 @@ Como conclusión del análisis de los datos, vemos que el enfoque al agro de la 
 \newpage 
 # Aplicacion de Shiny
 
-Para visualizar de manera interactiva los diferentes usos del agua, optamos por utilizar un mapa que muestre los destinos en las distintas cuencas y permita filtrarlos según los usos. Para lograr esto, utilizamos nuevamente los mapas disponibles en la biblioteca 'GeoUY' y la librería 'GGIRAPHE' para crear un mapa interactivo. La idea es crear un mapa que resuma en gran medida lo que hemos observado en el análisis exploratorio.
+Para visualizar de manera interactiva los diferentes usos del agua, optamos por utilizar un mapa que muestre los destinos en las distintas cuencas y permita filtrarlos según los usos. Para lograr esto, utilizamos nuevamente los mapas disponibles en la biblioteca `GeoUY` y la librería `GGIRAPH` para crear un mapa interactivo. La idea es crear un mapa que resuma en gran medida lo que hemos observado en el análisis exploratorio.
 
-Después de analizar varias opciones de visualización, los datos se presentan a realizar un diagrama Sankey. Este tipo de diagrama nos permite visualizar de manera bivariada los datos de volúmenes y los diferentes usos del agua, proporcionando una representación clara de como se distribuye el volumen de agua. Utilizaremos "NetworkD3" para la creación de los diagramas una librería que se adapta perfectamente para utilizar en una aplicación Shiny.
+Después de analizar varias opciones de visualización, los datos se presentan a realizar un diagrama Sankey. Este tipo de diagrama nos permite visualizar de manera bivariada los datos de volúmenes y los diferentes usos del agua, proporcionando una representación clara de como se distribuye el volumen de agua. Utilizaremos `NetworkD3` para la creación de los diagramas una librería que se adapta perfectamente para utilizar en una aplicación Shiny.
 
 La aplicación se encuentra publicada en la siguiente ruta:
 [https://vdq66d-facundo-morini.shinyapps.io/App_Agua/](https://vdq66d-facundo-morini.shinyapps.io/App_Agua/)
@@ -281,6 +282,7 @@ sankey_vol <- sankeyNetwork(Links = links_sankey, Nodes = nodos_sankey,
 ```
 
 ![Diagrama Sankey para el volumen anual total](Rplot.png){height=250,width=600}
+
 
 \newpage
 # Modelo predictivo
@@ -468,4 +470,9 @@ print(tabla_metricas, include.rownames = FALSE,caption="Datooosss")
 
 **Únicamente para la Sensibilidad el modelo de Árbol 2 supera al Random Forest (0.02 "más sensible"), entendemos que al ser pequeña la diferencia, y ser mejor el Random Forest en el resto de los indicadores, es éste último el modelo que seleccionamos para poder predecir el uso final que tendrá una solicitud de extración entre "Riego" y "Otros Usos"**
 
+## Paquetes utilizados y fuente de los datos
 
+**Datos**: Visualizador de recursos hídricos. Dirección Nacional de Aguas (DINAGUA). Ministerio de ambiente.
+[https://www.ambiente.gub.uy/informacion_hidrica/](https://www.ambiente.gub.uy/informacion_hidrica/)
+
+**Paquetes**: [-@R-geouy,-@R-ggiraph,-@R-networkD3,-@R-randomForest,-@R-rpart,-@R-tidyverse]
