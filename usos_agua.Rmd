@@ -123,6 +123,15 @@ datos_cuenca <- left_join(mapa, reg_cuenca, by = "codcuenca") %>%
                 left_join(vol_cuenca, by = "codcuenca")
 ```
 
+
+\textcolor{violet}{La introducción y las preguntas se explican muy bien y esta muy enfocado al problema. La
+descripción de los datos también es bastante acertada (como comentario general, las tablas
+también se enumeran) me gustó que consideraran el resumen de las variables a nivel de
+metadatos en la introducción al leerlo el documento se vuelve aún mas autocontenido.}
+
+
+\textcolor{violet}{Al final incluyeron los paquetes utilizados (que esta muy bien mencionarlos) pero hubiera estado mejor que lo incluyeran como una referencia cruzada a las referencias del documento, de esta manera es mas fácil acceder a la documentación.}
+
 # Análisis exploratorio de los datos
 
 Con el objetivo de responder las preguntas planteadas, se centrará en el volumen anual permitido de extracción de agua, así como en el uso y destino asignado a la misma. También se tomará en cuenta la cuenca hidrográfica de origen de la extracción. Para llevar a cabo este análisis, utilizaremos la librería GeoUY, la cual nos facilita el uso de datos geográficos de Uruguay de manera cómoda y sencilla en R.
@@ -145,6 +154,9 @@ reg_uso <- datos_l %>%
 #Gráfico de barras que muestra la cantidad de solicitudes agrupadas según su uso
 reg_uso
 ```
+
+\textcolor{violet}{Deberían usar referencias cruzadas para mencionar las figuras en el texto. En el título de la figura debe contenter el tipo de gráfico y las variables involucradas algunas veces también se puede incluir en el caption un breve comentario y extenderlo en el texto. Por ejemplo en la Figura 1 el título podría ser, Gráfico de barras de la cantidad de registros habilitados según usos del augua, se podrí aincluir la fecha a la que se tiene los datos. Este es un comentario general para todos los gráficos, el título debe darme la información de lo que estamos dibujando, deben estar autocontenidos.}
+
 
 En principio, parece que los usos agropecuarios representarán la mayoría del consumo de agua. Ahora, analicemos el volumen anual permitido de extracción según los diferentes usos.
 
@@ -246,6 +258,11 @@ Al examinar las principales empresas registradas, se observa que las dos primera
 
 Como conclusión del análisis de los datos, vemos que el enfoque al agro de la producción uruguaya repercute en los usos que se le da al agua donde es predominantemente utilizada para el riego, se destaca claramente cómo en las zonas del este del país, donde el arroz es el cultivo predominante, el volumen de agua utilizado es considerablemente mayor. Por otro lado, en las zonas del sur se percibe que el consumo humano se presenta como el uso mayoritario, especialmente en las cuencas cercanas a Montevideo. En la zona oeste del país, en cambio, prevalece el uso del agua para la producción de cereales y oleaginosas. Es importante tener en cuenta un detalle de los datos: al solo estar contabilizándose las extracciones, cultivos como el arroz, que requieren un gran traslado de agua para su producción, van a quedar en evidencia. No se podrían sacar conclusiones con los datos disponibles sobre qué cultivos tienen un mejor rendimiento de producción/volumen de agua consumidos, ya que no se estaría considerando, por ejemplo, el efecto que tienen los cultivos de soja en las aguas subterráneas, que no requieren de una extracción y no aparecen en estos datos. Este informe es solo un punto de partida para lo que podrían ser estudios más detallados sobre el tema, haciéndose preguntas como si deberíamos revisar nuestra matriz productiva en pos de asegurar los recursos hídricos en el futuro, o qué efectos tienen otras industrias, como la forestal, que no están contemplados en estos datos en la disponibilidad del agua.
 
+
+\textcolor{violet}{A lo que refiere al análisis exploratorio abordaron bien sus dos variables principales tanto a
+nivel individual como las georeferencias. En la Figura 3 deberían Poner algo como Mapa de Uruguay agrupado por cuenca hidrográfica y coloreado por uso mayoritario. En la Figura 4 se puede mejorar el título para que quede mas claro. En la Figura 4 bien en intentar agregar una capa adicional con información, un gráfico interactivo podría aportar para ello incluyendo información adicional cuando selecciono una cuenca. O  estático incluyendo intensidad de color en vez de tamaño para la variable volumen.
+}
+
 \newpage 
 # Aplicacion de Shiny
 
@@ -283,8 +300,14 @@ sankey_vol <- sankeyNetwork(Links = links_sankey, Nodes = nodos_sankey,
 
 ![Diagrama Sankey para el volumen anual total](Rplot.png){height=250,width=600}
 
-
+\textcolor{violet}{La shiny quedó muy bien, interactiva y bastante minimalista, es decir no tiene cosas
+de más, todo lo que se encuentra es útil. Incluir visualizaciones interactivas que incluyan un links entre plots es la primera vez que lo hacen en un proyecto en estos 6 años así que felicitaciones!
+Nos gustó la idea sobre el tooltip de información para
+darle contexto a un usuario que ingresa por primera vez, yo lo hubiera puesto al ingresar pero
+son gustos.}
 \newpage
+
+
 # Modelo predictivo
 
 Se construye un modelo para determinar si el Uso que tendrá la solicitud de extracción va a ser para Riego, o para otros usos distintos de Riego. La clasificación sería de la siguiente forma:
@@ -464,11 +487,15 @@ df_metricas
 ```{r,results='asis'}
 tabla_metricas <- knitr::kable(df_metricas, format = "latex", booktabs = TRUE)%>%
             kableExtra::kable_styling( latex_options = c("striped", "hold_position"))
-print(tabla_metricas, include.rownames = FALSE,caption="Datooosss")
+print(tabla_metricas, include.rownames = FALSE,caption = "Datooosss")
 ```
 
 
 **Únicamente para la Sensibilidad el modelo de Árbol 2 supera al Random Forest (0.02 "más sensible"), entendemos que al ser pequeña la diferencia, y ser mejor el Random Forest en el resto de los indicadores, es éste último el modelo que seleccionamos para poder predecir el uso final que tendrá una solicitud de extración entre "Riego" y "Otros Usos"**
+
+\textcolor{violet}{Las ideas que consideraron estuvieron bien respecto al modelado. No queda claro en el texto ni en las tablas que presentan si son con datos training o test, mirando el código lo hicieron pero deberían aclarar esto en el texto. Les faltó interpretar los resultados del los árboles las conclusiones pueden ser interesantes. A lo que refiere a la evaluación del
+modelo la interpretación de los indicadores son correctas y podrían utilizar el F1 score que
+mezcla especificidad y sensibilidad. Podrían haber incluido una medida de importancia de variables en RF para interpretar los esultados.}
 
 ## Paquetes utilizados y fuente de los datos
 
@@ -476,3 +503,7 @@ print(tabla_metricas, include.rownames = FALSE,caption="Datooosss")
 [https://www.ambiente.gub.uy/informacion_hidrica/](https://www.ambiente.gub.uy/informacion_hidrica/)
 
 **Paquetes**: [-@R-geouy,-@R-ggiraph,-@R-networkD3,-@R-randomForest,-@R-rpart,-@R-tidyverse]
+
+
+
+\textcolor{violet}{HICIERON UN MUY BUEN TRABAJO Y SE NOTA QUE APRENDIERON MUCHO. SIGAN ESTUDIANDO EN LA LICENCIATURA Y VAN A PODER PROFUNDIZAR MAS SOBRE ALGUNAS COSAS QUE NO LLEGAMOS A PROFUNDIZAR EN EL CURSO Y QUE MEJORARÍA MUCHO EL MODELADO DE ESTOS DATOS ENTRE OTROS. PUNTOS  95/100}
